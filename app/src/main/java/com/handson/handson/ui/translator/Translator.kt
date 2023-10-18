@@ -6,10 +6,12 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import android.util.Log
-import android.util.Size
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.widget.LinearLayout
+import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.Arrangement
@@ -36,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -44,8 +47,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat.getMainExecutor
 import androidx.core.content.ContextCompat.startActivity
-import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -59,11 +62,7 @@ import java.util.concurrent.Executors
 fun Translator(translatorViewModel: TranslatorViewModel = viewModel()) {
 
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val activity = (context as? Activity)
-
-    val cameraController = remember { LifecycleCameraController(context) }
-
     var text by rememberSaveable { mutableStateOf("") }
 
 
@@ -96,14 +95,14 @@ fun Translator(translatorViewModel: TranslatorViewModel = viewModel()) {
 
                         ) {
                         Box(modifier = Modifier.fillMaxHeight(0.75f)) {
-                            Camera(cameraController, lifecycleOwner)
+                            Camera(translatorViewModel)
                         }
 
 
                         Spacer(modifier = Modifier.height(10.dp))
 
                         TextField(
-                            value = translatorViewModel.translation, onValueChange = { text = it },
+                            value = translatorViewModel.translation, onValueChange = { translatorViewModel.updateTranslation(it) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .fillMaxHeight(0.6f),
@@ -137,7 +136,7 @@ fun Translator(translatorViewModel: TranslatorViewModel = viewModel()) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Box(Modifier.fillMaxWidth(0.5f)) {
-                            Camera(cameraController, lifecycleOwner)
+                            Camera()
                         }
 
                         Spacer(modifier = Modifier.width(10.dp))
@@ -245,39 +244,61 @@ fun Translator(translatorViewModel: TranslatorViewModel = viewModel()) {
 
 @Composable
 private fun Camera(
-    cameraController: LifecycleCameraController,
-    lifecycleOwner: LifecycleOwner
+    translatorViewModel: TranslatorViewModel = viewModel()
 ) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
+    val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
+    val coroutineScope = rememberCoroutineScope()
+
     AndroidView(
         modifier = Modifier
             .fillMaxSize(),
-        factory = { context ->
-            PreviewView(context).apply {
-                layoutParams =
-                    LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+        factory = { ctx ->
+            val previewView = PreviewView(ctx).apply {
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
                 scaleType = PreviewView.ScaleType.FIT_CENTER
-            }.also { previewView ->
-                previewView.controller = cameraController
-                cameraController.bindToLifecycle(lifecycleOwner)
+            }
 
-                val imageAnalysis = ImageAnalysis.Builder()
-                    // enable the following line if RGBA output is needed.
-                    // .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
-                    .setTargetResolution(Size(1280, 720))
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .build()
+            val executor = Executors.newFixedThreadPool(5)
+            val imageAnalysis = ImageAnalysis.Builder()
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build()
+                .apply {
+                    setAnalyzer(executor, ImageAnalysis.Analyzer { imageProxy ->
 
-                val executor = Executors.newFixedThreadPool(5)
-                imageAnalysis.setAnalyzer(executor, ImageAnalysis.Analyzer { imageProxy ->
-                    val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-                    // insert your code here.
 
-                    // after done, release the ImageProxy object
+                    //TODO: Implement prediction through the tflite model
+
+                    translatorViewModel.updateTranslation("Hello")
+
                     imageProxy.close()
                 })
+                }
 
-            }
+
+            cameraProviderFuture.addListener({
+                val cameraProvider = cameraProviderFuture.get()
+                val preview = Preview.Builder().build().also {
+                    it.setSurfaceProvider(previewView.surfaceProvider)
+
+                }
+
+                val cameraSelector = CameraSelector.Builder()
+                    .requireLensFacing(CameraSelector.LENS_FACING_BACK)
+                    .build()
+
+                cameraProvider.unbindAll()
+                cameraProvider.bindToLifecycle(
+                    lifecycleOwner,
+                    cameraSelector,
+                    preview,
+                    imageAnalysis
+                )
+            }, getMainExecutor(ctx))
+            previewView
         })
+
 }
 
 

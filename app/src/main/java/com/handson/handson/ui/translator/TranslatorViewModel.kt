@@ -13,4 +13,5 @@ class TranslatorViewModel: ViewModel() {
     fun updateTranslation(input: String) {
         translation = input
     }
+
 }
