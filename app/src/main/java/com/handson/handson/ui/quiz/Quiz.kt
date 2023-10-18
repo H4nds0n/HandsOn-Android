@@ -1,4 +1,4 @@
-package com.handson.handson.ui.translator
+package com.handson.handson.ui.quiz
 
 import android.Manifest
 import android.app.Activity
@@ -6,6 +6,8 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import android.util.Log
+import android.util.Size
+import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.widget.LinearLayout
 import androidx.camera.core.CameraSelector
@@ -26,10 +28,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.magnifier
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -39,7 +40,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,24 +54,24 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat.getMainExecutor
-import androidx.core.content.ContextCompat.startActivity
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
-import java.util.concurrent.Executors
 import com.handson.handson.ui.Screen
-
+import java.util.concurrent.Executors
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
-fun Translator(navController: NavController, translatorViewModel: TranslatorViewModel = viewModel()) {
+fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel()) {
 
     val context = LocalContext.current
     val activity = (context as? Activity)
+
     var text by rememberSaveable { mutableStateOf("") }
 
 
@@ -87,8 +87,8 @@ fun Translator(navController: NavController, translatorViewModel: TranslatorView
                     Text("HandsOn")
                 },
                 actions = {
-                    IconButton(onClick = { navController.navigate(Screen.Quiz.route) }) {
-                        Icon(imageVector = Icons.Filled.ArrowForward,
+                    IconButton(onClick = { navController.navigate(Screen.Translator.route) }) {
+                        Icon(imageVector = Icons.Filled.ArrowBack,
                              contentDescription = "Localized Description")
                     }
                 }
@@ -110,14 +110,14 @@ fun Translator(navController: NavController, translatorViewModel: TranslatorView
 
                         ) {
                         Box(modifier = Modifier.fillMaxHeight(0.75f)) {
-                            Camera(translatorViewModel)
+                            Camera(quizViewModel)
                         }
 
 
                         Spacer(modifier = Modifier.height(10.dp))
 
                         TextField(
-                            value = translatorViewModel.translation, onValueChange = { translatorViewModel.updateTranslation(it) },
+                            value = quizViewModel.translation, onValueChange = { quizViewModel.updateTranslation(it) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .fillMaxHeight(0.6f),
@@ -131,13 +131,10 @@ fun Translator(navController: NavController, translatorViewModel: TranslatorView
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .fillMaxHeight(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.End
                         ) {
                             Button(onClick = { /*TODO*/ }) {
-                                Text(text = "Reverse")
-                            }
-                            Button(onClick = { /*TODO*/ }) {
-                                Text(text = "Clear")
+                                Text(text = "Skip")
                             }
                         }
 
@@ -161,7 +158,7 @@ fun Translator(navController: NavController, translatorViewModel: TranslatorView
                         ) {
 
                             TextField(
-                                value = translatorViewModel.translation,
+                                value = quizViewModel.translation,
                                 onValueChange = { text = it },
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -175,13 +172,10 @@ fun Translator(navController: NavController, translatorViewModel: TranslatorView
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(bottom = 5.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.End
                             ) {
                                 Button(onClick = { /*TODO*/ }) {
-                                    Text(text = "Reverse")
-                                }
-                                Button(onClick = { /*TODO*/ }) {
-                                    Text(text = "Clear")
+                                    Text(text = "Skip")
                                 }
                             }
 
@@ -215,7 +209,7 @@ fun Translator(navController: NavController, translatorViewModel: TranslatorView
                             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                                 data = Uri.fromParts("package", context.packageName, null)
                             }
-                        startActivity(context, intent, null)
+                        ContextCompat.startActivity(context, intent, null)
                     }
 
                     fun onDismissRequest() {
@@ -259,7 +253,7 @@ fun Translator(navController: NavController, translatorViewModel: TranslatorView
 
 @Composable
 private fun Camera(
-    translatorViewModel: TranslatorViewModel = viewModel()
+    translatorViewModel: QuizViewModel = viewModel()
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
@@ -283,12 +277,12 @@ private fun Camera(
                     setAnalyzer(executor, ImageAnalysis.Analyzer { imageProxy ->
 
 
-                    //TODO: Implement prediction through the tflite model
+                        //TODO: Implement prediction through the tflite model
 
-                    translatorViewModel.updateTranslation("Hello")
+                        translatorViewModel.updateTranslation("Hello")
 
-                    imageProxy.close()
-                })
+                        imageProxy.close()
+                    })
                 }
 
 
@@ -310,11 +304,8 @@ private fun Camera(
                     preview,
                     imageAnalysis
                 )
-            }, getMainExecutor(ctx))
+            }, ContextCompat.getMainExecutor(ctx))
             previewView
         })
 
 }
-
-
-
