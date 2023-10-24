@@ -4,14 +4,42 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import com.handson.handson.model.ASLImages
+import com.handson.handson.model.ASLReverseTranslator
 
-class TranslatorViewModel: ViewModel() {
+class TranslatorViewModel : ViewModel() {
 
-    var translation by mutableStateOf("")
+    var translationText by mutableStateOf("")
         private set
 
+    var showReverseTranslation by mutableStateOf(false)
+        private set
+
+    private val reverseTranslator  = ASLReverseTranslator
+
+    var reverseTranslationImages = listOf<ASLImages>()
+
+    fun reverseTranslate(){
+        reverseTranslationImages = reverseTranslator.translate(translationText)
+    }
+
+
+
     fun updateTranslation(input: String) {
-        translation = input
+        translationText += input
+
+    }
+
+    fun updateTranslateText(input: String) {
+        translationText = input
+    }
+
+    fun showReverseTranslation(input: Boolean) {
+        showReverseTranslation = input
+    }
+
+    fun clearTranslationText(){
+        translationText = ""
     }
 
 }
