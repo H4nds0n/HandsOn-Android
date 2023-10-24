@@ -10,10 +10,11 @@ import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.widget.LinearLayout
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -26,12 +27,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.magnifier
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -39,7 +40,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,26 +49,42 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Alignment.Companion.CenterHorizontally
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat.getMainExecutor
 import androidx.core.content.ContextCompat.startActivity
+import androidx.core.graphics.scale
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
+import com.handson.handson.R
+import com.handson.handson.ml.AslModel
 import java.util.concurrent.Executors
 import com.handson.handson.ui.Screen
+import org.intellij.lang.annotations.JdkConstants.HorizontalAlignment
+import org.tensorflow.lite.DataType
+import org.tensorflow.lite.support.model.Model
+import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
+import java.nio.ByteBuffer
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
-fun Translator(navController: NavController, translatorViewModel: TranslatorViewModel = viewModel()) {
+fun Translator(
+    navController: NavController,
+    translatorViewModel: TranslatorViewModel = viewModel()
+) {
 
     val context = LocalContext.current
     val activity = (context as? Activity)
@@ -88,8 +104,10 @@ fun Translator(navController: NavController, translatorViewModel: TranslatorView
                 },
                 actions = {
                     IconButton(onClick = { navController.navigate(Screen.Quiz.route) }) {
-                        Icon(imageVector = Icons.Filled.ArrowForward,
-                             contentDescription = "Localized Description")
+                        Icon(
+                            imageVector = Icons.Filled.ArrowForward,
+                            contentDescription = "Localized Description"
+                        )
                     }
                 }
             )
@@ -100,9 +118,11 @@ fun Translator(navController: NavController, translatorViewModel: TranslatorView
                 .fillMaxSize()
                 .padding(innerPadding), contentAlignment = Alignment.Center
         ) {
-            BoxWithConstraints() {
-                Log.d("width", maxWidth.toString())
+            BoxWithConstraints {
                 if (maxWidth < 800.dp) {
+                    if (translatorViewModel.showReverseTranslation) {
+                        ReverseTranslation()
+                    }
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -117,7 +137,8 @@ fun Translator(navController: NavController, translatorViewModel: TranslatorView
                         Spacer(modifier = Modifier.height(10.dp))
 
                         TextField(
-                            value = translatorViewModel.translation, onValueChange = { translatorViewModel.updateTranslation(it) },
+                            value = translatorViewModel.translationText,
+                            onValueChange = { translatorViewModel.updateTranslateText(it) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .fillMaxHeight(0.6f),
@@ -133,17 +154,24 @@ fun Translator(navController: NavController, translatorViewModel: TranslatorView
                                 .fillMaxHeight(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Button(onClick = { /*TODO*/ }) {
-                                Text(text = "Reverse")
+                            Button(onClick = {
+                                translatorViewModel.reverseTranslate()
+                                translatorViewModel.showReverseTranslation(true)
                             }
-                            Button(onClick = { /*TODO*/ }) {
-                                Text(text = "Clear")
+                            ) {
+                                Text(text = stringResource(R.string.reverse))
+                            }
+                            Button(onClick = { translatorViewModel.clearTranslationText() }) {
+                                Text(text = stringResource(R.string.clear))
                             }
                         }
 
                     }
 
                 } else {
+                    if (translatorViewModel.showReverseTranslation) {
+                        ReverseTranslation()
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
@@ -161,8 +189,8 @@ fun Translator(navController: NavController, translatorViewModel: TranslatorView
                         ) {
 
                             TextField(
-                                value = translatorViewModel.translation,
-                                onValueChange = { text = it },
+                                value = translatorViewModel.translationText,
+                                onValueChange = { translatorViewModel.updateTranslateText(it) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .fillMaxHeight(0.7f),
@@ -177,11 +205,14 @@ fun Translator(navController: NavController, translatorViewModel: TranslatorView
                                     .padding(bottom = 5.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Button(onClick = { /*TODO*/ }) {
-                                    Text(text = "Reverse")
+                                Button(onClick = {
+                                    translatorViewModel.reverseTranslate()
+                                    translatorViewModel.showReverseTranslation(true)
+                                }) {
+                                    Text(text = stringResource(R.string.reverse))
                                 }
-                                Button(onClick = { /*TODO*/ }) {
-                                    Text(text = "Clear")
+                                Button(onClick = { translatorViewModel.clearTranslationText() }) {
+                                    Text(text = stringResource(R.string.clear))
                                 }
                             }
 
@@ -225,10 +256,10 @@ fun Translator(navController: NavController, translatorViewModel: TranslatorView
                     AlertDialog(
                         onDismissRequest = { onDismissRequest() },
                         title = {
-                            Text(text = "dialogTitle")
+                            Text(text = stringResource(R.string.camera_permission_required))
                         },
                         text = {
-                            Text(text = "dialogText")
+                            Text(text = stringResource(R.string.grant_camera_permission))
                         },
                         confirmButton = {
                             Button(
@@ -236,7 +267,7 @@ fun Translator(navController: NavController, translatorViewModel: TranslatorView
                                     onConfirmation()
                                 }
                             ) {
-                                Text("Confirm")
+                                Text(stringResource(R.string.grant_permission))
 
                             }
                         },
@@ -246,7 +277,7 @@ fun Translator(navController: NavController, translatorViewModel: TranslatorView
                                     onDismissRequest()
                                 }
                             ) {
-                                Text("Dismiss")
+                                Text(stringResource(R.string.dismiss))
                             }
                         }
                     )
@@ -266,6 +297,10 @@ private fun Camera(
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     val coroutineScope = rememberCoroutineScope()
 
+    val labels = listOf(
+        "A", "B", "C", "D"
+    )
+
     AndroidView(
         modifier = Modifier
             .fillMaxSize(),
@@ -275,20 +310,73 @@ private fun Camera(
                 scaleType = PreviewView.ScaleType.FIT_CENTER
             }
 
-            val executor = Executors.newFixedThreadPool(5)
+            val executor = Executors.newSingleThreadExecutor()
             val imageAnalysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
                 .apply {
-                    setAnalyzer(executor, ImageAnalysis.Analyzer { imageProxy ->
+                    setAnalyzer(executor, ImageAnalysis.Analyzer { imageProxy: ImageProxy ->
+                        val model = AslModel.newInstance(
+                            context,
+                            Model.Options.Builder().setDevice(Model.Device.NNAPI).build()
+                        )
+                        // The image rotation and RGB image buffer are initialized only once
+                        // the analyzer has started running
+                        /*var bitmap: Bitmap = Bitmap.createBitmap(
+
+                            imageProxy.width,
+                            imageProxy.height,
+                            Bitmap.Config.ARGB_8888
+                        )*/
 
 
-                    //TODO: Implement prediction through the tflite model
+                        /* val plane = imageProxy.planes[0]
+                         val imageBuffer = plane.buffer
+                         val bytes = ByteArray(imageBuffer.remaining())
+                         imageBuffer.get(bytes)
 
-                    translatorViewModel.updateTranslation("Hello")
+                         // Create a Bitmap from the image data
+                         var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)*/
+                        var bitmap = imageProxy.toBitmap()
 
-                    imageProxy.close()
-                })
+                        bitmap = bitmap.scale(300, 300)
+                        var buffer: ByteBuffer = ByteBuffer.allocate(300 * 300 * 3 * 4)
+                        bitmap.copyPixelsToBuffer(buffer)
+
+                        // Creates inputs for reference.
+                        val inputFeature0 = TensorBuffer.createFixedSize(
+                            intArrayOf(1, 300, 300, 3),
+                            DataType.FLOAT32
+                        )
+                        inputFeature0.loadBuffer(buffer)
+
+// Runs model inference and gets result.
+                        val outputs = model.process(inputFeature0)
+                        val outputFeature0 = outputs.outputFeature0AsTensorBuffer
+                        val index = outputFeature0.floatArray.maxOfOrNull { it }
+                            ?.let { outputFeature0.intArray.indexOf(it.toInt()) }
+
+                        Log.d(
+                            "output",
+                            outputs.outputFeature0AsTensorBuffer.floatArray.contentToString()
+                        )
+
+                        val confidenceThreshold = 0.8 // Adjust the threshold as needed
+                        if (index != null && outputFeature0.floatArray[index] > confidenceThreshold) {
+                            val result = labels[index]
+                            translatorViewModel.updateTranslation(result)
+                        }
+
+                        //TODO: Implement prediction through the tflite model
+
+// Releases model resources if no longer used.
+                        model.close()
+
+
+
+                        imageProxy.close()
+
+                    })
                 }
 
 
@@ -317,4 +405,44 @@ private fun Camera(
 }
 
 
+@Composable
+fun ReverseTranslation(translatorViewModel: TranslatorViewModel = viewModel()) {
+    val reverseTranslatorImages = translatorViewModel.reverseTranslationImages
+    Dialog(onDismissRequest = { translatorViewModel.showReverseTranslation(false) }) {
+        Card(
+            modifier = Modifier
+                .height(300.dp)
+                .padding(10.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.reverse_translation),
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(
+                    CenterHorizontally
+                )
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(5.dp)
+            ) {
+                items(reverseTranslatorImages.size) { index ->
+
+                    val painter =
+                        painterResource(id = reverseTranslatorImages[index].imageResourceId)
+
+                    Image(
+                        painter = painter,
+                        contentDescription = null, // Set a meaningful content description if needed
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+    }
+}
 

@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">HandsOn</string>
+    <string name="reverse_translation">Reverse Translation</string>
+    <string name="reverse">Reverse</string>
+    <string name="clear">Clear</string>
+    <string name="camera_permission_required">Camera Permission Required</string>
+    <string name="grant_camera_permission">Grant the camera permission to use the ASL to text translation</string>
+    <string name="grant_permission">Grant permission</string>
+    <string name="dismiss">Dismiss</string>
 </resources>
