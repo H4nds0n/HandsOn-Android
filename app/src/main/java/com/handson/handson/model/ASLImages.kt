@@ -22,7 +22,7 @@ sealed class ASLImages(val imageResourceId: Int) {
         object O: ASLImages(R.drawable.o)
         object P: ASLImages(R.drawable.p)
         object Q: ASLImages(R.drawable.q)
-        object r: ASLImages(R.drawable.q)
+        object r: ASLImages(R.drawable.r)
         object S: ASLImages(R.drawable.s)
         object T: ASLImages(R.drawable.t)
         object U: ASLImages(R.drawable.u)

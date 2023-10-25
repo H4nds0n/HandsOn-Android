@@ -3,6 +3,7 @@ package com.handson.handson.ui.translator
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import android.provider.Settings
 import android.util.Log
@@ -51,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Alignment.Companion.CenterHorizontally
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
@@ -74,6 +76,7 @@ import java.util.concurrent.Executors
 import com.handson.handson.ui.Screen
 import org.intellij.lang.annotations.JdkConstants.HorizontalAlignment
 import org.tensorflow.lite.DataType
+import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.model.Model
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 import java.nio.ByteBuffer
@@ -339,16 +342,19 @@ private fun Camera(
                          var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)*/
                         var bitmap = imageProxy.toBitmap()
 
-                        bitmap = bitmap.scale(300, 300)
-                        var buffer: ByteBuffer = ByteBuffer.allocate(300 * 300 * 3 * 4)
-                        bitmap.copyPixelsToBuffer(buffer)
+                        bitmap = Bitmap.createScaledBitmap(bitmap,300, 300, true)
+                      /*  var buffer: ByteBuffer = ByteBuffer.allocate(300 * 300 * 3 * 4)
+                        bitmap.copyPixelsToBuffer(buffer)*/
+
+                        var tImage: TensorImage = TensorImage(DataType.FLOAT32)
+                        tImage.load(bitmap)
 
                         // Creates inputs for reference.
                         val inputFeature0 = TensorBuffer.createFixedSize(
                             intArrayOf(1, 300, 300, 3),
                             DataType.FLOAT32
                         )
-                        inputFeature0.loadBuffer(buffer)
+                        inputFeature0.loadBuffer(tImage.buffer)
 
 // Runs model inference and gets result.
                         val outputs = model.process(inputFeature0)
@@ -360,14 +366,14 @@ private fun Camera(
                             "output",
                             outputs.outputFeature0AsTensorBuffer.floatArray.contentToString()
                         )
+                        Log.d("output", outputFeature0.floatArray.maxOfOrNull { it }.toString())
 
-                        val confidenceThreshold = 0.8 // Adjust the threshold as needed
+                        val confidenceThreshold = 0.9 // Adjust the threshold as needed
                         if (index != null && outputFeature0.floatArray[index] > confidenceThreshold) {
                             val result = labels[index]
                             translatorViewModel.updateTranslation(result)
                         }
 
-                        //TODO: Implement prediction through the tflite model
 
 // Releases model resources if no longer used.
                         model.close()
@@ -437,8 +443,9 @@ fun ReverseTranslation(translatorViewModel: TranslatorViewModel = viewModel()) {
 
                     Image(
                         painter = painter,
+                        contentScale = ContentScale.Inside,
                         contentDescription = null, // Set a meaningful content description if needed
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
