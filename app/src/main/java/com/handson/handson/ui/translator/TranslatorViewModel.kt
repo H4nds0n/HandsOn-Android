@@ -1,5 +1,7 @@
 package com.handson.handson.ui.translator
 
+import android.graphics.Bitmap
+import android.view.translation.Translator
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -19,11 +21,12 @@ class TranslatorViewModel : ViewModel() {
 
     var reverseTranslationImages = listOf<ASLImages>()
 
+    lateinit var testBitmap: Bitmap
+
+
     fun reverseTranslate(){
         reverseTranslationImages = reverseTranslator.translate(translationText)
     }
-
-
 
     fun updateTranslation(input: String) {
         translationText += input
@@ -40,6 +43,10 @@ class TranslatorViewModel : ViewModel() {
 
     fun clearTranslationText(){
         translationText = ""
+    }
+
+    fun setBitmap(bitmap: Bitmap) {
+        testBitmap = bitmap
     }
 
 }
