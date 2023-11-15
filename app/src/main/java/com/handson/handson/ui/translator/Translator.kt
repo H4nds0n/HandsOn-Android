@@ -53,6 +53,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -377,6 +378,25 @@ fun Camera(updateTranslation: (String) -> Unit
     val context = LocalContext.current
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
 
+    var hands: Hands? by remember { mutableStateOf(null) }
+
+    // Initialize your Hands instance
+    DisposableEffect(Unit) {
+        val handsOptions = HandsOptions.builder()
+            .setModelComplexity(1)
+            .setMaxNumHands(1)
+            .setRunOnGpu(true)
+            .setStaticImageMode(false)
+            .setMinTrackingConfidence(0.9f)
+            .build()
+        hands = Hands(context, handsOptions)
+
+        onDispose {
+            // Release resources in the onDispose block
+            hands?.close()
+        }
+    }
+
     val labels = listOf(
         "A", "B", "C", "D"
     )
@@ -396,25 +416,27 @@ fun Camera(updateTranslation: (String) -> Unit
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                 .build()
                 .apply {
+
                     val model = AslModel.newInstance(
                         context,
                         Model.Options.Builder().setDevice(Model.Device.NNAPI).setNumThreads(8)
                             .build()
                     )
-
-                    val handsOptions = HandsOptions.builder()
+                   /* val handsOptions = HandsOptions.builder()
                         .setModelComplexity(1)
                         .setMaxNumHands(1)
                         .setRunOnGpu(true)
                         .setStaticImageMode(false)
                         .setMinTrackingConfidence(0.9f)
                         .build()
-                    val hands = Hands(context, handsOptions)
+                    val hands = Hands(context, handsOptions)*/
+
+
 
                     setAnalyzer(executor, ImageAnalysis.Analyzer { imageProxy: ImageProxy ->
 
 
-                        hands.setResultListener { result ->
+                        hands?.setResultListener { result ->
                             val multiLandmarks = result.multiHandLandmarks()
                             var boundingBox: RectF = RectF()
 
@@ -485,7 +507,7 @@ fun Camera(updateTranslation: (String) -> Unit
                             }
                         }
 
-                        hands.send(imageProxy.toBitmap(), System.currentTimeMillis())
+                        hands?.send(imageProxy.toBitmap(), System.currentTimeMillis())
 
                         // The image rotation and RGB image buffer are initialized only once
                         // the analyzer has started running
@@ -511,7 +533,6 @@ fun Camera(updateTranslation: (String) -> Unit
 
                         imageProxy.close()
                     })
-
                 }
 
 
