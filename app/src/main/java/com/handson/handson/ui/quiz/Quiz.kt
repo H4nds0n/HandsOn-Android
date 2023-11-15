@@ -270,6 +270,7 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
     }
 }
 
+@SuppressLint("SuspiciousIndentation")
 @Composable
 private fun Camera(
     quizViewModel: QuizViewModel = viewModel()
