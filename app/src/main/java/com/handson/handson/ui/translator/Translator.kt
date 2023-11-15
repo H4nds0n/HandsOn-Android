@@ -45,7 +45,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedIconButton
@@ -70,7 +69,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat.getMainExecutor
@@ -146,7 +144,11 @@ fun Translator(
 
                         ) {
                         Box(modifier = Modifier.fillMaxHeight(0.75f)) {
-                            Camera(translatorViewModel)
+                            Camera() { result ->
+                                translatorViewModel.updateTranslation(
+                                    result
+                                )
+                            }
                         }
 
 
@@ -195,7 +197,11 @@ fun Translator(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Box(Modifier.fillMaxWidth(0.5f)) {
-                            Camera()
+                            Camera() { result ->
+                                translatorViewModel.updateTranslation(
+                                    result
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.width(10.dp))
@@ -365,8 +371,7 @@ fun calculateHandBoundingBox(landmarks: List<LandmarkProto.NormalizedLandmark>):
 
 
 @Composable
-fun Camera(
-    translatorViewModel: TranslatorViewModel = viewModel()
+fun Camera(updateTranslation: (String) -> Unit
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
@@ -473,7 +478,7 @@ fun Camera(
                                 val confidenceThreshold = 0.75 // Adjust the threshold as needed
                                 if (index != null && outputFeature0.floatArray[index] > confidenceThreshold) {
                                     val result = labels[index]
-                                    translatorViewModel.updateTranslation(result)
+                                    updateTranslation(result)
                                 }
 
 
@@ -547,7 +552,7 @@ fun ReverseTranslation(translatorViewModel: TranslatorViewModel = viewModel()) {
     // Animate the Reverse translation (auto slide to next image)
     LaunchedEffect(key1 = isAnimating, key2 = isDoubleSpeed) {
 
-        if (isDoubleSpeed){
+        if (isDoubleSpeed) {
             itemDurationMillis /= 4
         }
 
@@ -585,7 +590,12 @@ fun ReverseTranslation(translatorViewModel: TranslatorViewModel = viewModel()) {
             Spacer(modifier = Modifier.height(10.dp))
 
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier= Modifier.padding(5.dp).align(CenterHorizontally)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier
+                    .padding(5.dp)
+                    .align(CenterHorizontally)
+            ) {
 
                 if (!isAnimating) {
                     FilledIconButton(onClick = { isAnimating = true }) {
@@ -600,12 +610,12 @@ fun ReverseTranslation(translatorViewModel: TranslatorViewModel = viewModel()) {
                         Icon(Icons.Outlined.Stop, "Stop Animation")
                     }
                 }
-                if (!isAnimating){
+                if (!isAnimating) {
                     OutlinedIconButton(onClick = { isAnimating = false }, enabled = false) {
                         Icon(Icons.Outlined.Pause, "Pause Animation")
 
                     }
-                }else {
+                } else {
                     OutlinedIconButton(onClick = { isAnimating = false }) {
                         Icon(Icons.Outlined.Pause, "Pause Animation")
 
@@ -613,10 +623,10 @@ fun ReverseTranslation(translatorViewModel: TranslatorViewModel = viewModel()) {
                 }
 
 
-                    OutlinedIconToggleButton(
-                        checked = isDoubleSpeed,
-                        onCheckedChange = { newChecked -> isDoubleSpeed = !isDoubleSpeed }) {
-                        Icon(Icons.Outlined.Speed, "Fast Animation")
+                OutlinedIconToggleButton(
+                    checked = isDoubleSpeed,
+                    onCheckedChange = { newChecked -> isDoubleSpeed = !isDoubleSpeed }) {
+                    Icon(Icons.Outlined.Speed, "Fast Animation")
 
 
                 }
