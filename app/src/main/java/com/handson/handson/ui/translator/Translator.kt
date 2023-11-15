@@ -4,6 +4,9 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Rect
+import android.graphics.RectF
 import android.net.Uri
 import android.provider.Settings
 import android.util.Log
@@ -29,15 +32,24 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedIconButton
+import androidx.compose.material3.OutlinedIconToggleButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -46,7 +58,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,27 +70,30 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat.getMainExecutor
 import androidx.core.content.ContextCompat.startActivity
-import androidx.core.graphics.scale
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
+import com.google.mediapipe.formats.proto.LandmarkProto
+import com.google.mediapipe.solutions.hands.Hands
+import com.google.mediapipe.solutions.hands.HandsOptions
 import com.handson.handson.R
 import com.handson.handson.ml.AslModel
-import java.util.concurrent.Executors
 import com.handson.handson.ui.Screen
-import org.intellij.lang.annotations.JdkConstants.HorizontalAlignment
+import kotlinx.coroutines.delay
 import org.tensorflow.lite.DataType
+import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
+import org.tensorflow.lite.support.image.ops.Rot90Op
 import org.tensorflow.lite.support.model.Model
-import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
-import java.nio.ByteBuffer
+import java.util.concurrent.Executors
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
@@ -92,7 +106,6 @@ fun Translator(
     val context = LocalContext.current
     val activity = (context as? Activity)
     var text by rememberSaveable { mutableStateOf("") }
-
 
     // Camera permission state
     val cameraPermissionState = rememberPermissionState(
@@ -291,14 +304,73 @@ fun Translator(
     }
 }
 
+fun cropImageWithBoundingBox(originalBitmap: Bitmap, boundingBox: RectF): Bitmap {
+    val left = (boundingBox.left * originalBitmap.width).toInt()
+    val top = (boundingBox.top * originalBitmap.height).toInt()
+    val right = (boundingBox.right * originalBitmap.width).toInt()
+    val bottom = (boundingBox.bottom * originalBitmap.height).toInt()
+
+    // Ensure the coordinates are within the bounds of the original image
+    val clampedLeft = left.coerceIn(0, originalBitmap.width - 1)
+    val clampedTop = top.coerceIn(0, originalBitmap.height - 1)
+    val clampedRight = right.coerceIn(0, originalBitmap.width - 1)
+    val clampedBottom = bottom.coerceIn(0, originalBitmap.height - 1)
+
+    // Calculate the width and height of the cropped region
+    val width = clampedRight - clampedLeft
+    val height = clampedBottom - clampedTop
+
+    // Create a new Bitmap that represents the cropped region
+    val croppedBitmap = Bitmap.createBitmap(width, height, originalBitmap.config)
+
+    // Copy the pixels from the original image to the cropped image
+    val canvas = Canvas(croppedBitmap)
+    val srcRect = Rect(clampedLeft, clampedTop, clampedRight, clampedBottom)
+    val destRect = Rect(0, 0, width, height)
+    canvas.drawBitmap(originalBitmap, srcRect, destRect, null)
+
+    return croppedBitmap
+}
+
+fun calculateHandBoundingBox(landmarks: List<LandmarkProto.NormalizedLandmark>): RectF {
+    // Initialize variables to find the bounding box coordinates
+    var minX = Float.MAX_VALUE
+    var minY = Float.MAX_VALUE
+    var maxX = Float.MIN_VALUE
+    var maxY = Float.MIN_VALUE
+    var padding = 0.1f
+
+    for (landmark in landmarks) {
+        val x = landmark.x
+        val y = landmark.y
+
+        // Update the min and max coordinates
+        if (x < minX) {
+            minX = x
+        }
+        if (x > maxX) {
+            maxX = x
+        }
+        if (y < minY) {
+            minY = y
+        }
+        if (y > maxY) {
+            maxY = y
+        }
+    }
+
+    // Create a RectF with the calculated bounding box coordinates
+    return RectF(minX - padding, minY - padding, maxX + padding, maxY + padding)
+}
+
+
 @Composable
-private fun Camera(
+fun Camera(
     translatorViewModel: TranslatorViewModel = viewModel()
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
-    val coroutineScope = rememberCoroutineScope()
 
     val labels = listOf(
         "A", "B", "C", "D"
@@ -316,13 +388,100 @@ private fun Camera(
             val executor = Executors.newSingleThreadExecutor()
             val imageAnalysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                 .build()
                 .apply {
+                    val model = AslModel.newInstance(
+                        context,
+                        Model.Options.Builder().setDevice(Model.Device.NNAPI).setNumThreads(8)
+                            .build()
+                    )
+
+                    val handsOptions = HandsOptions.builder()
+                        .setModelComplexity(1)
+                        .setMaxNumHands(1)
+                        .setRunOnGpu(true)
+                        .setStaticImageMode(false)
+                        .setMinTrackingConfidence(0.9f)
+                        .build()
+                    val hands = Hands(context, handsOptions)
+
                     setAnalyzer(executor, ImageAnalysis.Analyzer { imageProxy: ImageProxy ->
-                        val model = AslModel.newInstance(
-                            context,
-                            Model.Options.Builder().setDevice(Model.Device.NNAPI).build()
-                        )
+
+
+                        hands.setResultListener { result ->
+                            val multiLandmarks = result.multiHandLandmarks()
+                            var boundingBox: RectF = RectF()
+
+                            if (multiLandmarks != null && multiLandmarks.isNotEmpty()) {
+                                for (i in 0 until multiLandmarks.size) {
+                                    val landmarks = multiLandmarks[i]
+
+                                    // Extract individual landmarks from the NormalizedLandmarkList
+                                    val normalizedLandmarks = landmarks.landmarkList
+
+                                    // Calculate the bounding box for each detected hand
+                                    boundingBox = calculateHandBoundingBox(normalizedLandmarks)
+                                }
+
+                                Log.d("hands", boundingBox.toString())
+                                val croppedBitmap =
+                                    cropImageWithBoundingBox(result.inputBitmap(), boundingBox)
+
+                                var bitmap = croppedBitmap
+
+                                bitmap = Bitmap.createScaledBitmap(bitmap, 300, 300, true)
+                                /*
+                                   var buffer: ByteBuffer = ByteBuffer.allocate(300 * 300 * 3 * 4)
+                                  bitmap.copyPixelsToBuffer(buffer)*/
+
+                                var tImage: TensorImage = TensorImage(DataType.FLOAT32)
+                                tImage.load(bitmap)
+
+                                // only for testing purposes
+                                // NormalizeOp(0f,255.0f).apply(tImage.tensorBuffer)
+
+                                var processor = ImageProcessor.Builder()
+                                    .add(Rot90Op())
+                                    .add(Rot90Op())
+                                    .add(Rot90Op())
+                                    .build()
+                                processor.process(tImage)
+
+                                //  translatorViewModel.setBitmap(tImage.bitmap)
+
+
+                                // Runs model inference and gets result.
+                                val outputs = model.process(
+                                    tImage.tensorBuffer
+                                )
+
+
+                                val outputFeature0 = outputs.outputFeature0AsTensorBuffer
+                                val index = outputFeature0.floatArray.maxOfOrNull { it }
+                                    ?.let { outputFeature0.intArray.indexOf(it.toInt()) }
+
+                                Log.d(
+                                    "output",
+                                    outputs.outputFeature0AsTensorBuffer.floatArray.contentToString()
+                                )
+                                Log.d(
+                                    "output",
+                                    outputFeature0.floatArray.maxOfOrNull { it }.toString()
+                                )
+
+                                val confidenceThreshold = 0.75 // Adjust the threshold as needed
+                                if (index != null && outputFeature0.floatArray[index] > confidenceThreshold) {
+                                    val result = labels[index]
+                                    translatorViewModel.updateTranslation(result)
+                                }
+
+
+                            }
+                        }
+
+                        hands.send(imageProxy.toBitmap(), System.currentTimeMillis())
+
                         // The image rotation and RGB image buffer are initialized only once
                         // the analyzer has started running
                         /*var bitmap: Bitmap = Bitmap.createBitmap(
@@ -340,49 +499,14 @@ private fun Camera(
 
                          // Create a Bitmap from the image data
                          var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)*/
-                        var bitmap = imageProxy.toBitmap()
-
-                        bitmap = Bitmap.createScaledBitmap(bitmap,300, 300, true)
-                      /*  var buffer: ByteBuffer = ByteBuffer.allocate(300 * 300 * 3 * 4)
-                        bitmap.copyPixelsToBuffer(buffer)*/
-
-                        var tImage: TensorImage = TensorImage(DataType.FLOAT32)
-                        tImage.load(bitmap)
-
-                        // Creates inputs for reference.
-                        val inputFeature0 = TensorBuffer.createFixedSize(
-                            intArrayOf(1, 300, 300, 3),
-                            DataType.FLOAT32
-                        )
-                        inputFeature0.loadBuffer(tImage.buffer)
-
-// Runs model inference and gets result.
-                        val outputs = model.process(inputFeature0)
-                        val outputFeature0 = outputs.outputFeature0AsTensorBuffer
-                        val index = outputFeature0.floatArray.maxOfOrNull { it }
-                            ?.let { outputFeature0.intArray.indexOf(it.toInt()) }
-
-                        Log.d(
-                            "output",
-                            outputs.outputFeature0AsTensorBuffer.floatArray.contentToString()
-                        )
-                        Log.d("output", outputFeature0.floatArray.maxOfOrNull { it }.toString())
-
-                        val confidenceThreshold = 0.9 // Adjust the threshold as needed
-                        if (index != null && outputFeature0.floatArray[index] > confidenceThreshold) {
-                            val result = labels[index]
-                            translatorViewModel.updateTranslation(result)
-                        }
 
 
-// Releases model resources if no longer used.
-                        model.close()
-
+                        // Releases model resources if no longer used.
 
 
                         imageProxy.close()
-
                     })
+
                 }
 
 
@@ -414,27 +538,98 @@ private fun Camera(
 @Composable
 fun ReverseTranslation(translatorViewModel: TranslatorViewModel = viewModel()) {
     val reverseTranslatorImages = translatorViewModel.reverseTranslationImages
+    val lazyColumnListState = rememberLazyListState()
+    var isAnimating by remember { mutableStateOf(true) }
+    var isDoubleSpeed by remember { mutableStateOf(false) }
+    var isStopped by remember { mutableStateOf(false) }
+    var itemDurationMillis = 2000L // Adjust the duration for each item on screen
+
+    // Animate the Reverse translation (auto slide to next image)
+    LaunchedEffect(key1 = isAnimating, key2 = isDoubleSpeed) {
+
+        if (isDoubleSpeed){
+            itemDurationMillis /= 4
+        }
+
+        if (isAnimating) {
+            if (isStopped || lazyColumnListState.firstVisibleItemIndex == reverseTranslatorImages.size - 1) {
+                lazyColumnListState.scrollToItem(0)
+                isStopped = false
+            }
+            for (index in lazyColumnListState.firstVisibleItemIndex until reverseTranslatorImages.size) {
+                lazyColumnListState.animateScrollToItem(index)
+                delay(itemDurationMillis)
+            }
+            isAnimating = false
+        }
+
+    }
+
+
     Dialog(onDismissRequest = { translatorViewModel.showReverseTranslation(false) }) {
         Card(
             modifier = Modifier
-                .height(300.dp)
+                .height(400.dp)
                 .padding(10.dp)
         ) {
             Text(
                 text = stringResource(R.string.reverse_translation),
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.align(
-                    CenterHorizontally
-                )
+                modifier = Modifier
+                    .align(
+                        CenterHorizontally
+                    )
+                    .padding(10.dp)
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
 
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier= Modifier.padding(5.dp).align(CenterHorizontally)) {
+
+                if (!isAnimating) {
+                    FilledIconButton(onClick = { isAnimating = true }) {
+                        Icon(Icons.Outlined.PlayArrow, "Play Animation")
+
+                    }
+                } else {
+                    FilledIconButton(onClick = {
+                        isStopped = true
+                        isAnimating = false
+                    }) {
+                        Icon(Icons.Outlined.Stop, "Stop Animation")
+                    }
+                }
+                if (!isAnimating){
+                    OutlinedIconButton(onClick = { isAnimating = false }, enabled = false) {
+                        Icon(Icons.Outlined.Pause, "Pause Animation")
+
+                    }
+                }else {
+                    OutlinedIconButton(onClick = { isAnimating = false }) {
+                        Icon(Icons.Outlined.Pause, "Pause Animation")
+
+                    }
+                }
+
+
+                    OutlinedIconToggleButton(
+                        checked = isDoubleSpeed,
+                        onCheckedChange = { newChecked -> isDoubleSpeed = !isDoubleSpeed }) {
+                        Icon(Icons.Outlined.Speed, "Fast Animation")
+
+
+                }
+
+            }
+
+
+
             LazyColumn(
+                state = lazyColumnListState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(5.dp)
+                    .padding(10.dp)
             ) {
                 items(reverseTranslatorImages.size) { index ->
 
@@ -445,11 +640,18 @@ fun ReverseTranslation(translatorViewModel: TranslatorViewModel = viewModel()) {
                         painter = painter,
                         contentScale = ContentScale.Inside,
                         contentDescription = null, // Set a meaningful content description if needed
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
                     )
+                    /*Image(
+                        bitmap = translatorViewModel.testBitmap.asImageBitmap(),
+                        contentDescription = "test"
+                    )*/
                 }
+
             }
         }
     }
 }
+
 

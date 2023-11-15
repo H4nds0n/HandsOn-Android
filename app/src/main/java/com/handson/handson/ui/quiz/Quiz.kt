@@ -9,6 +9,7 @@ import android.net.Uri
 import android.provider.Settings
 import android.util.Log
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.translation.Translator
 import android.widget.LinearLayout
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -64,6 +65,7 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
 import com.handson.handson.ml.AslModel
 import com.handson.handson.ui.Screen
+import com.handson.handson.ui.translator.Translator
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.model.Model
@@ -313,7 +315,7 @@ private fun Camera(
                             Bitmap.Config.ARGB_8888
                         )*/
 
-
+                        
                         /* val plane = imageProxy.planes[0]
                          val imageBuffer = plane.buffer
                          val bytes = ByteArray(imageBuffer.remaining())
@@ -411,6 +413,7 @@ private fun Camera(
 
 }
 
+
 private fun generateQuestion(): String {
     val alphabet = "ABC"
     val randomIndex = Random.nextInt(alphabet.length)
@@ -428,7 +431,6 @@ private fun ShowCorrect(quizViewModel: QuizViewModel = viewModel()) {
                 .width(150.dp),
             tint = Color.Green
         )
-
 
     }
 }
