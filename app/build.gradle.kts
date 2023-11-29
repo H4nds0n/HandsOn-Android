@@ -73,17 +73,19 @@ dependencies {
     implementation ("androidx.camera:camera-lifecycle:1.3.0")
     implementation ("androidx.camera:camera-video:1.3.0")
     implementation ("androidx.camera:camera-extensions:1.3.0")
-    implementation ("androidx.window:window:1.1.0")
 
     implementation ("com.google.accompanist:accompanist-permissions:0.33.2-alpha")
     implementation ("io.coil-kt:coil-compose:1.4.0")
 
     implementation ("com.google.mediapipe:solution-core:latest.release")
     implementation ("com.google.mediapipe:hands:latest.release")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
-    implementation("org.tensorflow:tensorflow-lite:latest.release")
-    implementation("org.tensorflow:tensorflow-lite-metadata:0.4.4")
-    implementation("org.tensorflow:tensorflow-lite-gpu:latest.release")
+    implementation("org.tensorflow:tensorflow-lite-support:latest.release")
+    //implementation("org.tensorflow:tensorflow-lite:latest.release")
+    implementation ("org.tensorflow:tensorflow-lite:2.14.0")
+
+    implementation("org.tensorflow:tensorflow-lite-metadata:latest.release")
+   // implementation("org.tensorflow:tensorflow-lite-gpu:latest.release")
+    implementation ("com.google.android.gms:play-services-tflite-gpu:16.2.0")
 
 
 

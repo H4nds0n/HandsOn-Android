@@ -50,6 +50,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.OutlinedIconToggleButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
@@ -58,6 +62,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -83,16 +88,30 @@ import com.google.accompanist.permissions.shouldShowRationale
 import com.google.mediapipe.formats.proto.LandmarkProto
 import com.google.mediapipe.solutions.hands.Hands
 import com.google.mediapipe.solutions.hands.HandsOptions
+import com.handson.handson.HandsOn
 import com.handson.handson.R
 import com.handson.handson.ml.AslModel
 import com.handson.handson.ui.Screen
 import kotlinx.coroutines.delay
 import org.tensorflow.lite.DataType
+import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.support.common.FileUtil
+import org.tensorflow.lite.support.image.ColorSpaceType
 import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.Rot90Op
+import org.tensorflow.lite.support.label.TensorLabel
 import org.tensorflow.lite.support.model.Model
+import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
+import org.tensorflow.lite.support.tensorbuffer.TensorBufferFloat
+import java.io.FileInputStream
+import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.MappedByteBuffer
+import java.nio.channels.FileChannel
 import java.util.concurrent.Executors
+import kotlin.math.exp
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
@@ -105,6 +124,23 @@ fun Translator(
     val context = LocalContext.current
     val activity = (context as? Activity)
     var text by rememberSaveable { mutableStateOf("") }
+    val coroutineScope = rememberCoroutineScope()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    if (translatorViewModel.shouldShowSnackbar) {
+        LaunchedEffect(translatorViewModel.shouldShowSnackbar) {
+            val result = snackbarHostState.showSnackbar(
+                translatorViewModel.snackbarMessage,
+                "",
+                true,
+                SnackbarDuration.Short
+            )
+            if(result == SnackbarResult.Dismissed){
+               translatorViewModel.shouldShowSnackbar = false
+            }
+            translatorViewModel.shouldShowSnackbar = false
+        }
+    }
 
     // Camera permission state
     val cameraPermissionState = rememberPermissionState(
@@ -112,6 +148,9 @@ fun Translator(
     )
 
     Scaffold(
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
+        },
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
@@ -124,8 +163,9 @@ fun Translator(
                             contentDescription = "Localized Description"
                         )
                     }
-                }
-            )
+                },
+
+                )
         },
     ) { innerPadding ->
         Box(
@@ -134,7 +174,7 @@ fun Translator(
                 .padding(innerPadding), contentAlignment = Alignment.Center
         ) {
             BoxWithConstraints {
-                if (maxWidth < 800.dp) {
+                if (maxWidth < 700.dp) {
                     if (translatorViewModel.showReverseTranslation) {
                         ReverseTranslation()
                     }
@@ -145,11 +185,13 @@ fun Translator(
 
                         ) {
                         Box(modifier = Modifier.fillMaxHeight(0.75f)) {
-                            Camera() { result ->
-                                translatorViewModel.updateTranslation(
-                                    result
-                                )
-                            }
+                            Camera(
+                                updateTranslation = { result ->
+                                    translatorViewModel.updateTranslationFromML(result)
+                                },
+                                updateHandInPicture = { handsInPicture ->
+                                  //  Log.d("handsIn",translatorViewModel.handInPicture.toString())
+                                })
                         }
 
 
@@ -198,11 +240,12 @@ fun Translator(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Box(Modifier.fillMaxWidth(0.5f)) {
-                            Camera() { result ->
-                                translatorViewModel.updateTranslation(
-                                    result
-                                )
-                            }
+                            Camera(
+                                updateTranslation = { result ->
+                                    translatorViewModel.updateTranslationFromML(result)
+                                },
+                                updateHandInPicture = { handsInPicture ->
+                                })
                         }
 
                         Spacer(modifier = Modifier.width(10.dp))
@@ -372,7 +415,9 @@ fun calculateHandBoundingBox(landmarks: List<LandmarkProto.NormalizedLandmark>):
 
 
 @Composable
-fun Camera(updateTranslation: (String) -> Unit
+fun Camera(
+    updateTranslation: (String) -> Unit,
+    updateHandInPicture: (Boolean) -> Unit
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
@@ -398,7 +443,7 @@ fun Camera(updateTranslation: (String) -> Unit
     }
 
     val labels = listOf(
-        "A", "B", "C", "D"
+        "A", "B", "C"
     )
 
     AndroidView(
@@ -422,14 +467,20 @@ fun Camera(updateTranslation: (String) -> Unit
                         Model.Options.Builder().setDevice(Model.Device.NNAPI).setNumThreads(8)
                             .build()
                     )
-                   /* val handsOptions = HandsOptions.builder()
-                        .setModelComplexity(1)
-                        .setMaxNumHands(1)
-                        .setRunOnGpu(true)
-                        .setStaticImageMode(false)
-                        .setMinTrackingConfidence(0.9f)
-                        .build()
-                    val hands = Hands(context, handsOptions)*/
+                    /*val modelFile = FileUtil.loadMappedFile(HandsOn.appContext, "asl_model.tflite")
+
+                    val modelAlternative: Interpreter = Interpreter(modelFile);*/
+                    //modelAlternative = Interpreter(loadModelFile());
+
+
+                    /* val handsOptions = HandsOptions.builder()
+                         .setModelComplexity(1)
+                         .setMaxNumHands(1)
+                         .setRunOnGpu(true)
+                         .setStaticImageMode(false)
+                         .setMinTrackingConfidence(0.9f)
+                         .build()
+                     val hands = Hands(context, handsOptions)*/
 
 
 
@@ -437,6 +488,8 @@ fun Camera(updateTranslation: (String) -> Unit
 
 
                         hands?.setResultListener { result ->
+                            updateHandInPicture(result.multiHandLandmarks().isNotEmpty())
+                           // Log.d("handsIn", result.multiHandLandmarks().toArray().contentToString())
                             val multiLandmarks = result.multiHandLandmarks()
                             var boundingBox: RectF = RectF()
 
@@ -457,7 +510,7 @@ fun Camera(updateTranslation: (String) -> Unit
 
                                 var bitmap = croppedBitmap
 
-                                bitmap = Bitmap.createScaledBitmap(bitmap, 300, 300, true)
+                                bitmap = Bitmap.createScaledBitmap(bitmap, 224, 224, true)
                                 /*
                                    var buffer: ByteBuffer = ByteBuffer.allocate(300 * 300 * 3 * 4)
                                   bitmap.copyPixelsToBuffer(buffer)*/
@@ -475,10 +528,27 @@ fun Camera(updateTranslation: (String) -> Unit
                                     .build()
                                 processor.process(tImage)
 
-                                //  translatorViewModel.setBitmap(tImage.bitmap)
+                                var testbitmap = tImage.bitmap
+                                //translatorViewModel.setBitmap(tImage.bitmap)
 
+                                /*// Prepare the output buffer as a TensorBuffer
+                                val outputShape = modelAlternative.getOutputTensor(0).shape() // get the shape of the output tensor
+                                val outputDataType = modelAlternative.getOutputTensor(0).dataType() // get the data type of the output tensor
+                                val outputTensorBuffer = TensorBuffer.createFixedSize(outputShape, outputDataType)
+
+                                modelAlternative.run(tImage.buffer, outputTensorBuffer.buffer)
+
+                                val outputLabels = labels
+                                val outputProbabilities = TensorLabel(outputLabels, outputTensorBuffer).mapWithFloatValue // get a map of labels and probabilities
+                                val outputMaxEntry = outputProbabilities.maxByOrNull { it.value } // get the entry with the maximum probability
+                                val outputMaxLabel = outputMaxEntry?.key // get the label of the maximum probability
+                                val outputMaxProbability = outputMaxEntry?.value // get the probability of the maximum probability
+                                Log.d("output","The predicted label is $outputMaxLabel with a probability of $outputMaxProbability")
+                                Log.d("output",outputProbabilities.toString())*/
 
                                 // Runs model inference and gets result.
+
+                                tImage.buffer.order(ByteOrder.nativeOrder())
                                 val outputs = model.process(
                                     tImage.tensorBuffer
                                 )
@@ -487,6 +557,8 @@ fun Camera(updateTranslation: (String) -> Unit
                                 val outputFeature0 = outputs.outputFeature0AsTensorBuffer
                                 val index = outputFeature0.floatArray.maxOfOrNull { it }
                                     ?.let { outputFeature0.intArray.indexOf(it.toInt()) }
+
+
 
                                 Log.d(
                                     "output",
@@ -497,6 +569,7 @@ fun Camera(updateTranslation: (String) -> Unit
                                     outputFeature0.floatArray.maxOfOrNull { it }.toString()
                                 )
 
+
                                 val confidenceThreshold = 0.75 // Adjust the threshold as needed
                                 if (index != null && outputFeature0.floatArray[index] > confidenceThreshold) {
                                     val result = labels[index]
@@ -504,6 +577,10 @@ fun Camera(updateTranslation: (String) -> Unit
                                 }
 
 
+
+                            }
+                            else{
+                                updateTranslation("")
                             }
                         }
 
@@ -685,4 +762,11 @@ fun ReverseTranslation(translatorViewModel: TranslatorViewModel = viewModel()) {
     }
 }
 
+
+
+private fun applySoftmax(input: FloatArray): FloatArray {
+    val max = input.maxOrNull() ?: 0.0f
+    val expSum = input.map { exp((it - max)).toFloat() }.sum()
+    return input.map { exp((it - max)).toFloat() / expSum }.toFloatArray()
+}
 
