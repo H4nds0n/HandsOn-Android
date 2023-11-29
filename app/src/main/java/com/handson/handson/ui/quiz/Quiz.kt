@@ -108,7 +108,7 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
 
                         ) {
                         Box(modifier = Modifier.fillMaxHeight(0.75f)) {
-                            Camera() { answer ->
+                            /*Camera() { answer ->
 
 
                                 quizViewModel.updateTranslation("Say: ${quizViewModel.question} \nYour Answer: $answer")
@@ -118,7 +118,7 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
                                         quizViewModel.newQuestion()
                                     }
                                 }
-                            }
+                            }*/
                         }
 
 
@@ -164,7 +164,7 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Box(Modifier.fillMaxWidth(0.5f)) {
-                            Camera() { answer ->
+                           /* Camera() { answer ->
 
 
                                 quizViewModel.updateTranslation("Say: ${quizViewModel.question} \nYour Answer: $answer")
@@ -175,7 +175,7 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
                                     }
 
                                 }
-                            }
+                            }*/
                         }
 
 

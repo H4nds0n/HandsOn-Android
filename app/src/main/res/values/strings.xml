@@ -7,4 +7,5 @@
     <string name="grant_camera_permission">Grant the camera permission to use the ASL to text translation</string>
     <string name="grant_permission">Grant permission</string>
     <string name="dismiss">Dismiss</string>
+    <string name="snackbar_TakeHandOutOfPicture">Take hand out of the picture and try again.</string>
 </resources>
