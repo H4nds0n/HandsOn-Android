@@ -3,6 +3,7 @@ package com.handson.handson.ui.quiz
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.provider.Settings
 import android.util.Log
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.TextIncrease
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -33,12 +35,16 @@ import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -59,8 +65,7 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
     val context = LocalContext.current
     val activity = (context as? Activity)
 
-    var text by rememberSaveable { mutableStateOf("") }
-
+    var orientation by remember { mutableIntStateOf(Configuration.ORIENTATION_PORTRAIT) }
 
     // Camera permission state
     val cameraPermissionState = rememberPermissionState(
@@ -69,8 +74,7 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
 
     // init questions
     var answer = ""
-    quizViewModel.updateTranslation("Say: ${quizViewModel.question}\nYour Answer: $answer")
-
+    quizViewModel.updateTranslation(question = quizViewModel.questionLetter, answer = answer)
 
 
     Scaffold(
@@ -86,6 +90,12 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
                             contentDescription = "Localized Description"
                         )
                     }
+                    IconButton(onClick = { quizViewModel.switchLevel() }) {
+                        Icon(
+                            imageVector = Icons.Filled.TextIncrease,
+                            contentDescription = null
+                        )
+                    }
                 }
             )
         },
@@ -97,187 +107,195 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
         ) {
             BoxWithConstraints() {
                 Log.d("width", maxWidth.toString())
-                if (maxWidth < 800.dp) {
-                    if (quizViewModel.showCorrect) {
-                        ShowCorrect()
+
+
+                val configuration = LocalConfiguration.current
+
+// If our configuration changes then this will launch a new coroutine scope for it
+                LaunchedEffect(configuration) {
+                    // Save any changes to the orientation value on the configuration object
+                    snapshotFlow { configuration.orientation }
+                        .collect { orientation = it }
+                }
+
+                when (orientation) {
+                    Configuration.ORIENTATION_LANDSCAPE -> {
+                        LandscapeContent(quizViewModel = quizViewModel)
                     }
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(5.dp),
-
-                        ) {
-                        Box(modifier = Modifier.fillMaxHeight(0.75f)) {
-                            /*Camera() { answer ->
-
-
-                                quizViewModel.updateTranslation("Say: ${quizViewModel.question} \nYour Answer: $answer")
-                                if (!quizViewModel.showCorrect) {
-                                    if (answer == quizViewModel.question) {
-                                        quizViewModel.showCorrectAnswer(true)
-                                        quizViewModel.newQuestion()
-                                    }
-                                }
-                            }*/
-                        }
-
-
-
-
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        TextField(
-                            value = quizViewModel.translation,
-                            onValueChange = { quizViewModel.updateTranslation(it) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(0.6f),
-                            maxLines = Int.MAX_VALUE,
-                            readOnly = true
-                        )
-
-
-                        Spacer(modifier = Modifier.height(15.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            Button(onClick = {
-                                quizViewModel.skip()
-                            }) {
-                                Text(text = "Skip")
-                            }
-                        }
-
+                    else -> {
+                        PortraitContent(quizViewModel = quizViewModel)
                     }
+                }
+            }
 
+        }
+        LaunchedEffect(cameraPermissionState) {
+            cameraPermissionState.launchPermissionRequest()
+        }
+
+        if (cameraPermissionState.status.isGranted) {
+            Log.d("permission", "Camera permission Granted")
+        } else {
+            Column {
+                val textToShow = if (cameraPermissionState.status.shouldShowRationale) {
+                    // If the user has denied the permission but the rationale can be shown,
+                    // then gently explain why the app requires this permission
 
                 } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Box(Modifier.fillMaxWidth(0.5f)) {
-                           /* Camera() { answer ->
+                    // If it's the first time the user lands on this feature, or the user
+                    // doesn't want to be asked again for this permission, explain that the
+                    // permission is required
 
+                    fun onConfirmation() {
+                        val intent =
+                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", context.packageName, null)
+                            }
+                        ContextCompat.startActivity(context, intent, null)
+                    }
 
-                                quizViewModel.updateTranslation("Say: ${quizViewModel.question} \nYour Answer: $answer")
-                                if (!quizViewModel.showCorrect) {
-                                    if (answer == quizViewModel.question) {
-                                        quizViewModel.showCorrectAnswer(true)
-                                        quizViewModel.newQuestion()
-                                    }
+                    fun onDismissRequest() {
+                        activity?.finish()
+                    }
 
+                    AlertDialog(
+                        onDismissRequest = { onDismissRequest() },
+                        title = {
+                            Text(text = "dialogTitle")
+                        },
+                        text = {
+                            Text(text = "dialogText")
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    onConfirmation()
                                 }
-                            }*/
-                        }
+                            ) {
+                                Text("Confirm")
 
-
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.SpaceBetween
-                    ) {
-
-                        TextField(
-                            value = quizViewModel.translation,
-                            onValueChange = { text = it },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(0.7f),
-                            maxLines = Int.MAX_VALUE,
-                            readOnly = true
-                        )
-
-                        Spacer(modifier = Modifier.height(15.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 5.dp),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            Button(onClick = { quizViewModel.skip() }) {
-                                Text(text = "Skip")
+                            }
+                        },
+                        dismissButton = {
+                            Button(
+                                onClick = {
+                                    onDismissRequest()
+                                }
+                            ) {
+                                Text("Dismiss")
                             }
                         }
-
-                    }
+                    )
                 }
             }
+
         }
-
-    }
-
-
-    LaunchedEffect(cameraPermissionState) {
-        cameraPermissionState.launchPermissionRequest()
-    }
-
-    if (cameraPermissionState.status.isGranted) {
-        Log.d("permission", "Camera permission Granted")
-    } else {
-        Column {
-            val textToShow = if (cameraPermissionState.status.shouldShowRationale) {
-                // If the user has denied the permission but the rationale can be shown,
-                // then gently explain why the app requires this permission
-
-            } else {
-                // If it's the first time the user lands on this feature, or the user
-                // doesn't want to be asked again for this permission, explain that the
-                // permission is required
-
-                fun onConfirmation() {
-                    val intent =
-                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                            data = Uri.fromParts("package", context.packageName, null)
-                        }
-                    ContextCompat.startActivity(context, intent, null)
-                }
-
-                fun onDismissRequest() {
-                    activity?.finish()
-                }
-
-                AlertDialog(
-                    onDismissRequest = { onDismissRequest() },
-                    title = {
-                        Text(text = "dialogTitle")
-                    },
-                    text = {
-                        Text(text = "dialogText")
-                    },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                onConfirmation()
-                            }
-                        ) {
-                            Text("Confirm")
-
-                        }
-                    },
-                    dismissButton = {
-                        Button(
-                            onClick = {
-                                onDismissRequest()
-                            }
-                        ) {
-                            Text("Dismiss")
-                        }
-                    }
-                )
-            }
-        }
-
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LandscapeContent(quizViewModel: QuizViewModel) {
+    var text by rememberSaveable { mutableStateOf("") }
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Box(Modifier.fillMaxWidth(0.5f)) {
+            Camera(
+                updateTranslation = { answer -> checkAnswer(quizViewModel = quizViewModel, answer = answer) },
+                updateHandInPicture = {}
+            )
+        }
+
+
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+
+            TextField(
+                value = quizViewModel.translation,
+                onValueChange = { text = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.7f),
+                maxLines = Int.MAX_VALUE,
+                readOnly = true
+            )
+
+            Spacer(modifier = Modifier.height(15.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 5.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Button(onClick = { quizViewModel.skip() }) {
+                    Text(text = "Skip")
+                }
+            }
+
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PortraitContent(quizViewModel: QuizViewModel) {
+    if (quizViewModel.showCorrect) {
+        ShowCorrect()
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(5.dp),
+
+        ) {
+        Box(modifier = Modifier.fillMaxHeight(0.75f)) {
+            Camera(
+                updateTranslation = { answer -> checkAnswer(quizViewModel = quizViewModel, answer = answer) },
+                updateHandInPicture = {}
+            )
+        }
+
+
+
+
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        TextField(
+            value = quizViewModel.translation,
+            onValueChange = { quizViewModel.updateTranslation(it) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.6f),
+            maxLines = Int.MAX_VALUE,
+            readOnly = true
+        )
+
+
+        Spacer(modifier = Modifier.height(15.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            Button(onClick = {
+                quizViewModel.skip()
+            }) {
+                Text(text = "Skip")
+            }
+        }
+
+    }
 }
 /*@SuppressLint("SuspiciousIndentation")
 @Composable
@@ -422,6 +440,39 @@ factory = { ctx ->
 
 }*/
 
+private fun checkAnswer(quizViewModel: QuizViewModel, answer: String) {
+    if(!quizViewModel.showCorrect) {
+        if (!quizViewModel.levelTwo) {
+            quizViewModel.updateTranslation(
+                question = quizViewModel.questionLetter,
+                answer = answer
+            )
+            if (!quizViewModel.showCorrect) {
+                if (answer == quizViewModel.questionLetter) {
+                    quizViewModel.showCorrectAnswer(true)
+                    quizViewModel.newQuestionLetter()
+                }
+            }
+        } else {
+            quizViewModel.updateTranslation(
+                question = quizViewModel.questionWord,
+                answer = quizViewModel.answeredWord + answer
+            )
+            if (!quizViewModel.showCorrect) {
+                if (answer == quizViewModel.questionWord[quizViewModel.answerCount].toString()) {
+                    quizViewModel.riseCounter()
+                    quizViewModel.answeredWord += answer
+                }
+
+                if (quizViewModel.questionWord == quizViewModel.answeredWord) {
+                    quizViewModel.showCorrectAnswer(true)
+                    quizViewModel.newQuestionWord()
+                    quizViewModel.resetWord()
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun ShowCorrect(quizViewModel: QuizViewModel = viewModel()) {

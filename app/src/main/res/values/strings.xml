@@ -8,4 +8,11 @@
     <string name="grant_permission">Grant permission</string>
     <string name="dismiss">Dismiss</string>
     <string name="snackbar_TakeHandOutOfPicture">Take hand out of the picture and try again.</string>
+    <string name="alphabet">ABC</string>
+    <string-array name="question_words">
+        <item>BBCC</item>
+        <item>BCCB</item>
+        <item>CBBC</item>
+        <item>CCBB</item>
+    </string-array>
 </resources>
