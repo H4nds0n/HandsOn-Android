@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.RectF
 import android.net.Uri
@@ -90,26 +91,18 @@ import com.google.mediapipe.solutions.hands.Hands
 import com.google.mediapipe.solutions.hands.HandsOptions
 import com.handson.handson.HandsOn
 import com.handson.handson.R
-import com.handson.handson.ml.AslModel
 import com.handson.handson.ui.Screen
 import kotlinx.coroutines.delay
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
-import org.tensorflow.lite.support.image.ColorSpaceType
+import org.tensorflow.lite.support.common.ops.NormalizeOp
 import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
+import org.tensorflow.lite.support.image.ops.ResizeOp
 import org.tensorflow.lite.support.image.ops.Rot90Op
-import org.tensorflow.lite.support.label.TensorLabel
-import org.tensorflow.lite.support.model.Model
-import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
-import org.tensorflow.lite.support.tensorbuffer.TensorBufferFloat
-import java.io.FileInputStream
-import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.nio.MappedByteBuffer
-import java.nio.channels.FileChannel
 import java.util.concurrent.Executors
 import kotlin.math.exp
 
@@ -135,8 +128,8 @@ fun Translator(
                 true,
                 SnackbarDuration.Short
             )
-            if(result == SnackbarResult.Dismissed){
-               translatorViewModel.shouldShowSnackbar = false
+            if (result == SnackbarResult.Dismissed) {
+                translatorViewModel.shouldShowSnackbar = false
             }
             translatorViewModel.shouldShowSnackbar = false
         }
@@ -190,7 +183,7 @@ fun Translator(
                                     translatorViewModel.updateTranslationFromML(result)
                                 },
                                 updateHandInPicture = { handsInPicture ->
-                                  //  Log.d("handsIn",translatorViewModel.handInPicture.toString())
+                                    //  Log.d("handsIn",translatorViewModel.handInPicture.toString())
                                 })
                         }
 
@@ -424,6 +417,10 @@ fun Camera(
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
 
     var hands: Hands? by remember { mutableStateOf(null) }
+    val modelFile = FileUtil.loadMappedFile(HandsOn.appContext, "asl_model.tflite")
+
+    val modelInterpreter: Interpreter = remember{Interpreter(modelFile, Interpreter.Options().setUseNNAPI(true).setNumThreads(8))}
+
 
     // Initialize your Hands instance
     DisposableEffect(Unit) {
@@ -433,12 +430,14 @@ fun Camera(
             .setRunOnGpu(true)
             .setStaticImageMode(false)
             .setMinTrackingConfidence(0.9f)
+            .setMinTrackingConfidence(0.9f)
             .build()
         hands = Hands(context, handsOptions)
 
         onDispose {
             // Release resources in the onDispose block
             hands?.close()
+            modelInterpreter.close()
         }
     }
 
@@ -462,25 +461,12 @@ fun Camera(
                 .build()
                 .apply {
 
-                    val model = AslModel.newInstance(
+                    /*val model = AslModel.newInstance(
                         context,
                         Model.Options.Builder().setDevice(Model.Device.NNAPI).setNumThreads(8)
                             .build()
-                    )
-                    /*val modelFile = FileUtil.loadMappedFile(HandsOn.appContext, "asl_model.tflite")
-
-                    val modelAlternative: Interpreter = Interpreter(modelFile);*/
-                    //modelAlternative = Interpreter(loadModelFile());
-
-
-                    /* val handsOptions = HandsOptions.builder()
-                         .setModelComplexity(1)
-                         .setMaxNumHands(1)
-                         .setRunOnGpu(true)
-                         .setStaticImageMode(false)
-                         .setMinTrackingConfidence(0.9f)
-                         .build()
-                     val hands = Hands(context, handsOptions)*/
+                    )*/
+                    // val model1 = AutoModel1.newInstance(context)
 
 
 
@@ -489,7 +475,7 @@ fun Camera(
 
                         hands?.setResultListener { result ->
                             updateHandInPicture(result.multiHandLandmarks().isNotEmpty())
-                           // Log.d("handsIn", result.multiHandLandmarks().toArray().contentToString())
+                            // Log.d("handsIn", result.multiHandLandmarks().toArray().contentToString())
                             val multiLandmarks = result.multiHandLandmarks()
                             var boundingBox: RectF = RectF()
 
@@ -518,20 +504,32 @@ fun Camera(
                                 var tImage: TensorImage = TensorImage(DataType.FLOAT32)
                                 tImage.load(bitmap)
 
+
+                                // Get the Bitmap dimensions
+                                val width = 224
+                                val height = 224
+
+                                // Create a ByteBuffer to hold the normalized data
+
+
                                 // only for testing purposes
-                                // NormalizeOp(0f,255.0f).apply(tImage.tensorBuffer)
 
                                 var processor = ImageProcessor.Builder()
                                     .add(Rot90Op())
                                     .add(Rot90Op())
                                     .add(Rot90Op())
-                                    .build()
+                                    .add(NormalizeOp(127.5f, 127.5f))
+                                    .add(ResizeOp(width, height, ResizeOp.ResizeMethod.NEAREST_NEIGHBOR))
+                                    .build();
+
                                 processor.process(tImage)
 
                                 var testbitmap = tImage.bitmap
                                 //translatorViewModel.setBitmap(tImage.bitmap)
 
-                                /*// Prepare the output buffer as a TensorBuffer
+                                /*
+
+                                // Prepare the output buffer as a TensorBuffer
                                 val outputShape = modelAlternative.getOutputTensor(0).shape() // get the shape of the output tensor
                                 val outputDataType = modelAlternative.getOutputTensor(0).dataType() // get the data type of the output tensor
                                 val outputTensorBuffer = TensorBuffer.createFixedSize(outputShape, outputDataType)
@@ -544,42 +542,94 @@ fun Camera(
                                 val outputMaxLabel = outputMaxEntry?.key // get the label of the maximum probability
                                 val outputMaxProbability = outputMaxEntry?.value // get the probability of the maximum probability
                                 Log.d("output","The predicted label is $outputMaxLabel with a probability of $outputMaxProbability")
-                                Log.d("output",outputProbabilities.toString())*/
+                                Log.d("output",outputProbabilities.toString())
+                                */
 
                                 // Runs model inference and gets result.
 
-                                tImage.buffer.order(ByteOrder.nativeOrder())
-                                val outputs = model.process(
+                                //  tImage.buffer.order(ByteOrder.nativeOrder())
+
+                                val inputData = ByteBuffer.allocateDirect(224 * 224 * 3 * 4)
+                                inputData.order(ByteOrder.nativeOrder())
+                                val outputProbabilityBuffer = ByteBuffer.allocateDirect(4 * labels.size)
+                                    .order(ByteOrder.nativeOrder())
+                                    .asFloatBuffer()
+
+                                bitmap = tImage.bitmap
+                                for (row in 0 until 224) {
+                                    for (col in 0 until 224) {
+                                        val pixelValue = bitmap?.getPixel(
+                                            col * bitmap.width / 224,
+                                            row * bitmap.width / 224
+                                        ) ?: 0
+
+                                        val red = Color.red(pixelValue)
+                                        val green = Color.green(pixelValue)
+                                        val blue = Color.blue(pixelValue)
+
+                                        val normalizedRed = red / 255.0f
+                                        val normalizedGreen = green / 255.0f
+                                        val normalizedBlue = blue / 255.0f
+
+                                        inputData.putFloat(normalizedRed)
+                                        inputData.putFloat(normalizedGreen)
+                                        inputData.putFloat(normalizedBlue)
+                                    }
+                                }
+
+                                modelInterpreter.resizeInput(0, intArrayOf(1, 224, 224, 3))
+                                modelInterpreter.allocateTensors()
+                                modelInterpreter.run(inputData, outputProbabilityBuffer)
+                                outputProbabilityBuffer.rewind()
+                                val outputProbabilities = FloatArray(labels.size)
+                                outputProbabilityBuffer.get(outputProbabilities)
+                                Log.d("output",outputProbabilities.contentToString())
+
+                               /* val outputs = model.process(
                                     tImage.tensorBuffer
                                 )
 
 
                                 val outputFeature0 = outputs.outputFeature0AsTensorBuffer
-                                val index = outputFeature0.floatArray.maxOfOrNull { it }
-                                    ?.let { outputFeature0.intArray.indexOf(it.toInt()) }
 
+
+
+                                val probabilityProcessor = TensorProcessor.Builder()
+                                    .add(DequantizeOp(0f, (1 / 255.0).toFloat())).build()
+                                val dequantizedBuffer =
+                                    probabilityProcessor.process(outputFeature0)
 
 
                                 Log.d(
                                     "output",
-                                    outputs.outputFeature0AsTensorBuffer.floatArray.contentToString()
+                                    outputFeature0.floatArray.contentToString()
                                 )
                                 Log.d(
                                     "output",
                                     outputFeature0.floatArray.maxOfOrNull { it }.toString()
                                 )
 
-
-                                val confidenceThreshold = 0.75 // Adjust the threshold as needed
-                                if (index != null && outputFeature0.floatArray[index] > confidenceThreshold) {
+*/
+                                val index = outputProbabilities.withIndex().maxByOrNull { it.value }?.index ?: -1
+                                val confidenceThreshold = 0.65 // Adjust the threshold as needed
+                                if (index != null && outputProbabilities[index] > confidenceThreshold) {
                                     val result = labels[index]
                                     updateTranslation(result)
                                 }
 
+                                /*
+                                                                val image = TensorImage.fromBitmap(tImage.bitmap)
+
+                                                                val outputs1 = model1.process(image)
+                                                                val locations = outputs1.locationsAsTensorBuffer
+                                                                val classes = outputs1.classesAsTensorBuffer
+                                                                val scores = outputs1.scoresAsTensorBuffer
+                                                                val numberOfDetections = outputs1.numberOfDetectionsAsTensorBuffer
+
+                                                                Log.d("testOutput", scores.floatArray.contentToString())*/
 
 
-                            }
-                            else{
+                            } else {
                                 updateTranslation("")
                             }
                         }
@@ -761,7 +811,6 @@ fun ReverseTranslation(translatorViewModel: TranslatorViewModel = viewModel()) {
         }
     }
 }
-
 
 
 private fun applySoftmax(input: FloatArray): FloatArray {
