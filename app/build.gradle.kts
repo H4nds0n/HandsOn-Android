@@ -3,6 +3,7 @@ import com.android.build.api.dsl.AaptOptions
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -86,6 +87,7 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-metadata:latest.release")
    // implementation("org.tensorflow:tensorflow-lite-gpu:latest.release")
     implementation ("com.google.android.gms:play-services-tflite-gpu:16.2.0")
+    implementation("com.google.firebase:firebase-ml-model-interpreter:22.0.4")
 
 
 
@@ -96,4 +98,10 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+
+    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
+    implementation("com.google.firebase:firebase-ml-modeldownloader")
+
+
 }
