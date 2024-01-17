@@ -9,8 +9,10 @@ import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.RectF
 import android.net.Uri
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import android.view.Surface
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.widget.LinearLayout
 import androidx.camera.core.CameraSelector
@@ -44,6 +46,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -60,13 +63,17 @@ import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Alignment.Companion.Center
 import androidx.compose.ui.Alignment.Companion.CenterHorizontally
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -89,20 +96,21 @@ import com.google.accompanist.permissions.shouldShowRationale
 import com.google.mediapipe.formats.proto.LandmarkProto
 import com.google.mediapipe.solutions.hands.Hands
 import com.google.mediapipe.solutions.hands.HandsOptions
-import com.handson.handson.HandsOn
 import com.handson.handson.R
 import com.handson.handson.ui.Screen
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.common.ops.NormalizeOp
 import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.ResizeOp
 import org.tensorflow.lite.support.image.ops.Rot90Op
+import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.time.LocalTime
 import java.util.concurrent.Executors
 import kotlin.math.exp
 
@@ -118,6 +126,8 @@ fun Translator(
     val activity = (context as? Activity)
     var text by rememberSaveable { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
+    val modelReady by translatorViewModel.mlModelIsReady.collectAsState()
+
 
     val snackbarHostState = remember { SnackbarHostState() }
     if (translatorViewModel.shouldShowSnackbar) {
@@ -177,14 +187,21 @@ fun Translator(
                             .padding(5.dp),
 
                         ) {
-                        Box(modifier = Modifier.fillMaxHeight(0.75f)) {
-                            Camera(
-                                updateTranslation = { result ->
-                                    translatorViewModel.updateTranslationFromML(result)
-                                },
-                                updateHandInPicture = { handsInPicture ->
-                                    //  Log.d("handsIn",translatorViewModel.handInPicture.toString())
-                                })
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight(0.75f)
+                                .fillMaxWidth(), contentAlignment = Center
+                        ) {
+                            if (modelReady) {
+                                Camera(
+                                    updateTranslation = { result ->
+                                        translatorViewModel.updateTranslationFromML(result)
+                                    },
+                                    translatorViewModel.mlModel!!
+                                )
+                            } else {
+                                CircularProgressIndicator(modifier = Modifier.align(Center))
+                            }
                         }
 
 
@@ -232,13 +249,21 @@ fun Translator(
                             .padding(horizontal = 10.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Box(Modifier.fillMaxWidth(0.5f)) {
-                            Camera(
-                                updateTranslation = { result ->
-                                    translatorViewModel.updateTranslationFromML(result)
-                                },
-                                updateHandInPicture = { handsInPicture ->
-                                })
+                        Box(
+                            Modifier
+                                .fillMaxWidth(0.5f)
+                                .fillMaxHeight(), contentAlignment = Center
+                        ) {
+                            if (modelReady) {
+                                Camera(
+                                    updateTranslation = { result ->
+                                        translatorViewModel.updateTranslationFromML(result)
+                                    },
+                                    translatorViewModel.mlModel!!
+                                )
+                            } else {
+                                CircularProgressIndicator(modifier = Modifier.align(Center))
+                            }
                         }
 
                         Spacer(modifier = Modifier.width(10.dp))
@@ -410,16 +435,28 @@ fun calculateHandBoundingBox(landmarks: List<LandmarkProto.NormalizedLandmark>):
 @Composable
 fun Camera(
     updateTranslation: (String) -> Unit,
-    updateHandInPicture: (Boolean) -> Unit
+    mlModelFile: File
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
+    val coroutineScope = rememberCoroutineScope()
+    var lastConsistentResult by remember { mutableStateOf("") }
+    var lastProcessedTimestamp by remember { mutableLongStateOf(0L) }
+    var frameCount by remember {
+        mutableIntStateOf(0)
+    }
 
     var hands: Hands? by remember { mutableStateOf(null) }
-    val modelFile = FileUtil.loadMappedFile(HandsOn.appContext, "asl_model.tflite")
+    //  val modelFile = FileUtil.loadMappedFile(HandsOn.appContext, "asl_model_mobilenetv2.tflite")
 
-    val modelInterpreter: Interpreter = remember{Interpreter(modelFile, Interpreter.Options().setUseNNAPI(true).setNumThreads(8))}
+    //val modelInterpreter: Interpreter = remember{Interpreter(mlModelFile, Interpreter.Options().setUseNNAPI(true).setNumThreads(8))}
+    val modelInterpreter: Interpreter = remember {
+        Interpreter(
+            mlModelFile,
+            Interpreter.Options().setUseNNAPI(true).setNumThreads(8)
+        )
+    }
 
 
     // Initialize your Hands instance
@@ -430,7 +467,7 @@ fun Camera(
             .setRunOnGpu(true)
             .setStaticImageMode(false)
             .setMinTrackingConfidence(0.9f)
-            .setMinTrackingConfidence(0.9f)
+            .setMinDetectionConfidence(0.9f)
             .build()
         hands = Hands(context, handsOptions)
 
@@ -442,7 +479,7 @@ fun Camera(
     }
 
     val labels = listOf(
-        "A", "B", "C"
+        "A", "B", "C", "D", "K"
     )
 
     AndroidView(
@@ -458,6 +495,7 @@ fun Camera(
             val imageAnalysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+                .setTargetRotation(Surface.ROTATION_90)
                 .build()
                 .apply {
 
@@ -467,14 +505,10 @@ fun Camera(
                             .build()
                     )*/
                     // val model1 = AutoModel1.newInstance(context)
-
-
-
                     setAnalyzer(executor, ImageAnalysis.Analyzer { imageProxy: ImageProxy ->
 
 
                         hands?.setResultListener { result ->
-                            updateHandInPicture(result.multiHandLandmarks().isNotEmpty())
                             // Log.d("handsIn", result.multiHandLandmarks().toArray().contentToString())
                             val multiLandmarks = result.multiHandLandmarks()
                             var boundingBox: RectF = RectF()
@@ -519,7 +553,13 @@ fun Camera(
                                     .add(Rot90Op())
                                     .add(Rot90Op())
                                     .add(NormalizeOp(127.5f, 127.5f))
-                                    .add(ResizeOp(width, height, ResizeOp.ResizeMethod.NEAREST_NEIGHBOR))
+                                    .add(
+                                        ResizeOp(
+                                            width,
+                                            height,
+                                            ResizeOp.ResizeMethod.NEAREST_NEIGHBOR
+                                        )
+                                    )
                                     .build();
 
                                 processor.process(tImage)
@@ -551,7 +591,7 @@ fun Camera(
 
                                 val inputData = ByteBuffer.allocateDirect(224 * 224 * 3 * 4)
                                 inputData.order(ByteOrder.nativeOrder())
-                                val outputProbabilityBuffer = ByteBuffer.allocateDirect(4 * labels.size)
+                                val outputProbabilityBuffer = ByteBuffer.allocateDirect(4 * 29)
                                     .order(ByteOrder.nativeOrder())
                                     .asFloatBuffer()
 
@@ -583,38 +623,53 @@ fun Camera(
                                 outputProbabilityBuffer.rewind()
                                 val outputProbabilities = FloatArray(labels.size)
                                 outputProbabilityBuffer.get(outputProbabilities)
-                                Log.d("output",outputProbabilities.contentToString())
+                                val stringProbapility =
+                                    outputProbabilities.mapIndexed { index, fl -> "${labels[index]} : ${fl * 100}%" }
+                                Log.d("output", outputProbabilities.contentToString())
+                                Log.d("outputRep", stringProbapility.toString())
 
-                               /* val outputs = model.process(
-                                    tImage.tensorBuffer
-                                )
-
-
-                                val outputFeature0 = outputs.outputFeature0AsTensorBuffer
-
-
-
-                                val probabilityProcessor = TensorProcessor.Builder()
-                                    .add(DequantizeOp(0f, (1 / 255.0).toFloat())).build()
-                                val dequantizedBuffer =
-                                    probabilityProcessor.process(outputFeature0)
+                                /* val outputs = model.process(
+                                     tImage.tensorBuffer
+                                 )
 
 
-                                Log.d(
-                                    "output",
-                                    outputFeature0.floatArray.contentToString()
-                                )
-                                Log.d(
-                                    "output",
-                                    outputFeature0.floatArray.maxOfOrNull { it }.toString()
-                                )
+                                 val outputFeature0 = outputs.outputFeature0AsTensorBuffer
 
-*/
-                                val index = outputProbabilities.withIndex().maxByOrNull { it.value }?.index ?: -1
-                                val confidenceThreshold = 0.65 // Adjust the threshold as needed
+
+
+                                 val probabilityProcessor = TensorProcessor.Builder()
+                                     .add(DequantizeOp(0f, (1 / 255.0).toFloat())).build()
+                                 val dequantizedBuffer =
+                                     probabilityProcessor.process(outputFeature0)
+
+
+                                 Log.d(
+                                     "output",
+                                     outputFeature0.floatArray.contentToString()
+                                 )
+                                 Log.d(
+                                     "output",
+                                     outputFeature0.floatArray.maxOfOrNull { it }.toString()
+                                 )
+
+ */
+                                val index =
+                                    outputProbabilities.withIndex().maxByOrNull { it.value }?.index
+                                        ?: -1
+                                val confidenceThreshold = 0.90 // Adjust the threshold as needed
                                 if (index != null && outputProbabilities[index] > confidenceThreshold) {
                                     val result = labels[index]
-                                    updateTranslation(result)
+
+                                    lastConsistentResult = result
+                                    // Check if the result is consistent for 1 second
+                                    if (SystemClock.uptimeMillis() - lastProcessedTimestamp > 1000) {
+                                        if (result == lastConsistentResult) {
+                                            updateTranslation(result)
+                                        }
+                                        lastProcessedTimestamp = SystemClock.uptimeMillis()
+                                    }
+
+                                    // updateTranslation(result)
                                 }
 
                                 /*
@@ -634,7 +689,11 @@ fun Camera(
                             }
                         }
 
-                        hands?.send(imageProxy.toBitmap(), System.currentTimeMillis())
+                        if (frameCount == 2) {
+
+                            hands?.send(imageProxy.toBitmap(), SystemClock.uptimeMillis())
+                            frameCount = 0
+                        }
 
                         // The image rotation and RGB image buffer are initialized only once
                         // the analyzer has started running
@@ -657,8 +716,10 @@ fun Camera(
 
                         // Releases model resources if no longer used.
 
+                        frameCount++
 
                         imageProxy.close()
+                        return@Analyzer
                     })
                 }
 
@@ -801,21 +862,11 @@ fun ReverseTranslation(translatorViewModel: TranslatorViewModel = viewModel()) {
                         modifier = Modifier
                             .fillMaxWidth()
                     )
-                    /*Image(
-                        bitmap = translatorViewModel.testBitmap.asImageBitmap(),
-                        contentDescription = "test"
-                    )*/
+
                 }
 
             }
         }
     }
-}
-
-
-private fun applySoftmax(input: FloatArray): FloatArray {
-    val max = input.maxOrNull() ?: 0.0f
-    val expSum = input.map { exp((it - max)).toFloat() }.sum()
-    return input.map { exp((it - max)).toFloat() / expSum }.toFloatArray()
 }
 
