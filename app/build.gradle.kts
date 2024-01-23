@@ -85,7 +85,7 @@ dependencies {
     implementation ("org.tensorflow:tensorflow-lite:2.14.0")
 
     implementation("org.tensorflow:tensorflow-lite-metadata:latest.release")
-   // implementation("org.tensorflow:tensorflow-lite-gpu:latest.release")
+    // implementation("org.tensorflow:tensorflow-lite-gpu:latest.release")
     implementation ("com.google.android.gms:play-services-tflite-gpu:16.2.0")
     implementation("com.google.firebase:firebase-ml-model-interpreter:22.0.4")
 
