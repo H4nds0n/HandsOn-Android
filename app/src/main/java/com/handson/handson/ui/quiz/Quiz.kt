@@ -73,7 +73,10 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
     )
 
     // init questions
+    // current answer
     var answer = ""
+
+    // setting content of text field
     quizViewModel.updateTranslation(question = quizViewModel.questionLetter, answer = answer)
 
 
@@ -108,6 +111,7 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
             BoxWithConstraints() {
                 Log.d("width", maxWidth.toString())
 
+                //build layout differently, if the device is rotated
                 val configuration = LocalConfiguration.current
 
                 LaunchedEffect(configuration) {
@@ -119,6 +123,7 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
                     Configuration.ORIENTATION_LANDSCAPE -> {
                         LandscapeContent(quizViewModel = quizViewModel)
                     }
+
                     else -> {
                         PortraitContent(quizViewModel = quizViewModel)
                     }
@@ -202,7 +207,12 @@ fun LandscapeContent(quizViewModel: QuizViewModel) {
     ) {
         Box(Modifier.fillMaxWidth(0.5f)) {
             Camera(
-                updateTranslation = { answer -> checkAnswer(quizViewModel = quizViewModel, answer = answer) },
+                updateTranslation = { answer ->
+                    checkAnswer(
+                        quizViewModel = quizViewModel,
+                        answer = answer
+                    )
+                },
                 updateHandInPicture = {}
             )
         }
@@ -255,7 +265,12 @@ fun PortraitContent(quizViewModel: QuizViewModel) {
         ) {
         Box(modifier = Modifier.fillMaxHeight(0.75f)) {
             Camera(
-                updateTranslation = { answer -> checkAnswer(quizViewModel = quizViewModel, answer = answer) },
+                updateTranslation = { answer ->
+                    checkAnswer(
+                        quizViewModel = quizViewModel,
+                        answer = answer
+                    )
+                },
                 updateHandInPicture = {}
             )
         }
@@ -294,183 +309,48 @@ fun PortraitContent(quizViewModel: QuizViewModel) {
 
     }
 }
-/*@SuppressLint("SuspiciousIndentation")
-@Composable
-private fun Camera(
-quizViewModel: QuizViewModel = viewModel()
-) {
-val lifecycleOwner = LocalLifecycleOwner.current
-val context = LocalContext.current
-val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
 
-val labels = listOf(
-"A", "B", "C", "D"
-)
-
-val coroutineScope = rememberCoroutineScope()
-
-AndroidView(
-modifier = Modifier
-    .fillMaxSize(),
-factory = { ctx ->
-    val previewView = PreviewView(ctx).apply {
-        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
-        scaleType = PreviewView.ScaleType.FIT_CENTER
-    }
-
-    val executor = Executors.newFixedThreadPool(5)
-    var question = generateQuestion()
-    quizViewModel.updateTranslation("Say: $question")
-    val imageAnalysis = ImageAnalysis.Builder()
-        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-        .build()
-        .apply {
-            setAnalyzer(executor, ImageAnalysis.Analyzer { imageProxy ->
-                val model = AslModel.newInstance(
-                    context,
-                    Model.Options.Builder().setDevice(Model.Device.NNAPI).build()
-                )
-                // The image rotation and RGB image buffer are initialized only once
-                // the analyzer has started running
-                *//*var bitmap: Bitmap = Bitmap.createBitmap(
-
-                            imageProxy.width,
-                            imageProxy.height,
-                            Bitmap.Config.ARGB_8888
-                        )*//*
-
-                        
-                        *//* val plane = imageProxy.planes[0]
-                         val imageBuffer = plane.buffer
-                         val bytes = ByteArray(imageBuffer.remaining())
-                         imageBuffer.get(bytes)
-
-                         // Create a Bitmap from the image data
-                         var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)*//*
-
-
-                        if (!quizViewModel.showCorrect) {
-                            var answer = ""
-                            var bitmap = imageProxy.toBitmap()
-
-                            bitmap = Bitmap.createScaledBitmap(bitmap, 300, 300, true)
-                            *//*  var buffer: ByteBuffer = ByteBuffer.allocate(300 * 300 * 3 * 4)
-                              bitmap.copyPixelsToBuffer(buffer)*//*
-
-                            var tImage: TensorImage = TensorImage(DataType.FLOAT32)
-                            tImage.load(bitmap)
-
-                            // Creates inputs for reference.
-                            val inputFeature0 = TensorBuffer.createFixedSize(
-                                intArrayOf(1, 300, 300, 3),
-                                DataType.FLOAT32
-                            )
-                            inputFeature0.loadBuffer(tImage.buffer)
-
-// Runs model inference and gets result.
-                            val outputs = model.process(inputFeature0)
-                            val outputFeature0 = outputs.outputFeature0AsTensorBuffer
-                            val index = outputFeature0.floatArray.maxOfOrNull { it }
-                                ?.let { outputFeature0.intArray.indexOf(it.toInt()) }
-
-                            Log.d(
-                                "output",
-                                outputs.outputFeature0AsTensorBuffer.floatArray.contentToString()
-                            )
-                            Log.d(
-                                "output",
-                                outputFeature0.floatArray.maxOfOrNull { it }.toString()
-                            )
-
-                            val confidenceThreshold = 0.9 // Adjust the threshold as needed
-                            if (index != null && outputFeature0.floatArray[index] > confidenceThreshold) {
-                                answer = labels[index]
-                                Log.d("quiz/out", answer)
-                                quizViewModel.updateTranslation("Say: $question\nYour Answer: $answer")
-                            }
-
-
-                            if (!quizViewModel.skipped && answer == question) {
-                                quizViewModel.showCorrectAnswer(true)
-
-                                val oldQuestion = question
-                                while(oldQuestion == question)
-                                question = generateQuestion()
-                            }
-
-                            if(quizViewModel.skipped) {
-                                val oldQuestion = question
-                                while(oldQuestion == question)
-                                question = generateQuestion()
-                            }
-                        }
-
-                        quizViewModel.setSkip(false)
-
-                        model.close()
-                        imageProxy.close()
-                    })
-                }
-
-
-            cameraProviderFuture.addListener({
-                val cameraProvider = cameraProviderFuture.get()
-                val preview = Preview.Builder().build().also {
-                    it.setSurfaceProvider(previewView.surfaceProvider)
-
-                }
-
-                val cameraSelector = CameraSelector.Builder()
-                    .requireLensFacing(CameraSelector.LENS_FACING_BACK)
-                    .build()
-
-                cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
-                    lifecycleOwner,
-                    cameraSelector,
-                    preview,
-                    imageAnalysis
-                )
-            }, ContextCompat.getMainExecutor(ctx))
-            previewView
-        })
-
-}*/
-
+// takes the output of the ai-model and checks the answer
 private fun checkAnswer(quizViewModel: QuizViewModel, answer: String) {
-    if(!quizViewModel.showCorrect) {
+    // ignored, if the "answer correct"-screen is currently displayed
+    if (!quizViewModel.showCorrect) {
+        // if the word-training-mode is not active
         if (!quizViewModel.levelTwo) {
             quizViewModel.updateTranslation(
                 question = quizViewModel.questionLetter,
                 answer = answer
             )
-            if (!quizViewModel.showCorrect) {
-                if (answer == quizViewModel.questionLetter) {
-                    quizViewModel.showCorrectAnswer(true)
-                    quizViewModel.newQuestionLetter()
-                }
+
+            if (answer == quizViewModel.questionLetter) {
+                quizViewModel.showCorrectAnswer(true)
+                quizViewModel.newQuestionLetter()
             }
+
         } else {
             quizViewModel.updateTranslation(
                 question = quizViewModel.questionWord,
                 answer = quizViewModel.answeredWord + answer
             )
-            if (!quizViewModel.showCorrect) {
-                if (answer == quizViewModel.questionWord[quizViewModel.answerCount].toString()) {
-                    quizViewModel.riseCounter()
-                    quizViewModel.answeredWord += answer
-                }
 
-                if (quizViewModel.questionWord == quizViewModel.answeredWord) {
-                    quizViewModel.showCorrectAnswer(true)
-                    quizViewModel.newQuestionWord()
-                    quizViewModel.resetWord()
-                }
+            // if the returned answer is equal to the letter of the current position in the question,
+            // the letter is added to the answer and the answer-count is raised
+            if (answer == quizViewModel.questionWord[quizViewModel.answerCount].toString()) {
+                quizViewModel.riseCounter()
+                quizViewModel.answeredWord += answer
             }
+
+            // if the answer is complete, the answer screen gets displayed and the question reset
+            if (quizViewModel.questionWord == quizViewModel.answeredWord) {
+                quizViewModel.showCorrectAnswer(true)
+                quizViewModel.newQuestionWord()
+                quizViewModel.resetWord()
+            }
+            
         }
     }
 }
 
+//show the "answer-correct"-screen
 @Composable
 private fun ShowCorrect(quizViewModel: QuizViewModel = viewModel()) {
     Dialog(onDismissRequest = { quizViewModel.showCorrectAnswer(false) }) {
