@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -64,8 +65,12 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
 
     val context = LocalContext.current
     val activity = (context as? Activity)
+    val modelReady by quizViewModel.mlModelIsReady.collectAsState()
 
-    var orientation by remember { mutableIntStateOf(Configuration.ORIENTATION_PORTRAIT) }
+    // Not perfect but suitable for the moment
+    // refactored to use the current orientation as initial value to solve the problem with layout
+    // shift on orientation change.
+    var orientation by remember { mutableIntStateOf(activity!!.resources.configuration.orientation) }
 
     // Camera permission state
     val cameraPermissionState = rememberPermissionState(
@@ -87,16 +92,19 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
                     Text("HandsOn")
                 },
                 actions = {
-                    IconButton(onClick = { navController.navigate(Screen.Translator.route) }) {
-                        Icon(
-                            imageVector = Icons.Filled.ArrowBack,
-                            contentDescription = "Localized Description"
-                        )
-                    }
+
                     IconButton(onClick = { quizViewModel.switchLevel() }) {
                         Icon(
                             imageVector = Icons.Filled.TextIncrease,
                             contentDescription = null
+                        )
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.navigate(Screen.Translator.route) }) {
+                        Icon(
+                            imageVector = Icons.Filled.ArrowBack,
+                            contentDescription = "Localized Description"
                         )
                     }
                 }
@@ -121,11 +129,11 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
 
                 when (orientation) {
                     Configuration.ORIENTATION_LANDSCAPE -> {
-                        LandscapeContent(quizViewModel = quizViewModel)
+                        LandscapeContent(quizViewModel = quizViewModel, modelReady)
                     }
 
                     else -> {
-                        PortraitContent(quizViewModel = quizViewModel)
+                        PortraitContent(quizViewModel = quizViewModel, modelReady)
                     }
                 }
             }
@@ -197,7 +205,7 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LandscapeContent(quizViewModel: QuizViewModel) {
+fun LandscapeContent(quizViewModel: QuizViewModel, modelReady: Boolean) {
     var text by rememberSaveable { mutableStateOf("") }
     Row(
         modifier = Modifier
@@ -206,15 +214,14 @@ fun LandscapeContent(quizViewModel: QuizViewModel) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Box(Modifier.fillMaxWidth(0.5f)) {
-            Camera(
-                updateTranslation = { answer ->
-                    checkAnswer(
-                        quizViewModel = quizViewModel,
-                        answer = answer
-                    )
-                },
-                updateHandInPicture = {}
-            )
+            if (modelReady)
+                Camera(
+                    updateTranslation = { answer ->
+                        checkAnswer(
+                            quizViewModel = quizViewModel,
+                            answer = answer
+                        )
+                    }, quizViewModel.mlModel!!)
         }
 
 
@@ -253,7 +260,7 @@ fun LandscapeContent(quizViewModel: QuizViewModel) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PortraitContent(quizViewModel: QuizViewModel) {
+fun PortraitContent(quizViewModel: QuizViewModel, modelReady: Boolean) {
     if (quizViewModel.showCorrect) {
         ShowCorrect()
     }
@@ -264,15 +271,16 @@ fun PortraitContent(quizViewModel: QuizViewModel) {
 
         ) {
         Box(modifier = Modifier.fillMaxHeight(0.75f)) {
-            Camera(
-                updateTranslation = { answer ->
-                    checkAnswer(
-                        quizViewModel = quizViewModel,
-                        answer = answer
-                    )
-                },
-                updateHandInPicture = {}
-            )
+
+            if (modelReady) {
+                Camera(
+                    updateTranslation = { answer ->
+                        checkAnswer(
+                            quizViewModel = quizViewModel,
+                            answer = answer
+                        )
+                    }, quizViewModel.mlModel!!)
+            }
         }
 
 
@@ -325,7 +333,6 @@ private fun checkAnswer(quizViewModel: QuizViewModel, answer: String) {
                 quizViewModel.showCorrectAnswer(true)
                 quizViewModel.newQuestionLetter()
             }
-
         } else {
             quizViewModel.updateTranslation(
                 question = quizViewModel.questionWord,
@@ -345,7 +352,6 @@ private fun checkAnswer(quizViewModel: QuizViewModel, answer: String) {
                 quizViewModel.newQuestionWord()
                 quizViewModel.resetWord()
             }
-            
         }
     }
 }
