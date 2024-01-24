@@ -3,6 +3,9 @@ package com.handson.handson.model
 import android.util.Log
 import androidx.compose.ui.text.toLowerCase
 
+/**
+ * Singleton that is used to translate the text input in a list of sign images
+ */
 object ASLReverseTranslator {
 
     fun translate(input: String): List<ASLImages> {
