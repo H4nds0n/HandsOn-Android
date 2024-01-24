@@ -2,6 +2,9 @@ package com.handson.handson.model
 
 import com.handson.handson.R
 
+/**
+ * Class that contains ASL signs and their corresponding images
+ */
 sealed class ASLImages(val imageResourceId: Int) {
 
 

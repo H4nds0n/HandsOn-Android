@@ -23,6 +23,11 @@ import java.io.File
 import kotlin.random.Random
 
 class QuizViewModel : ViewModel() {
+
+    init {
+        downloadMLModel()
+    }
+
     // indicates, if the user is in the word-training-mode
     var levelTwo by mutableStateOf(false)
         private set
@@ -57,6 +62,9 @@ class QuizViewModel : ViewModel() {
     val conditions = CustomModelDownloadConditions.Builder()
         .build()
 
+    /**
+     * Load the current ML Model from the storage and download the latest version from Firebase
+     */
     private fun downloadMLModel() {
         viewModelScope.launch(Dispatchers.IO) {
             FirebaseModelDownloader.getInstance()

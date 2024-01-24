@@ -54,17 +54,17 @@ class TranslatorViewModel : ViewModel() {
     val conditions = CustomModelDownloadConditions.Builder()
         .build()
 
-    // TODO: should be in central MLModel repo or sth with StateFlows to be observable from the
-    //  viewmodels then
+
+    /**
+     * Load the current ML Model from the storage and download the latest version from Firebase
+     */
     private fun downloadMLModel() {
         viewModelScope.launch(Dispatchers.IO) {
             FirebaseModelDownloader.getInstance()
                 .getModel(
-                    "test_model", DownloadType.LOCAL_MODEL_UPDATE_IN_BACKGROUND,
+                    "asl_model_mobilenetv2", DownloadType.LOCAL_MODEL_UPDATE_IN_BACKGROUND,
                     conditions
                 )
-                // does not work after downloading  because of a bug in the firebase library (securityException in Android 14+)
-                // will be fixed in a future release of the firebase module
                 .addOnSuccessListener { model: CustomModel? ->
                     // Download complete. Depending on your app, you could enable the ML
                     // feature, or switch from the local model to the remote model, etc.
@@ -88,9 +88,9 @@ class TranslatorViewModel : ViewModel() {
     }
 
 
-
-
-
+    /**
+     * Translate text to asl images list.
+     */
     fun reverseTranslate() {
         reverseTranslationImages = reverseTranslator.translate(translationText)
     }
@@ -127,15 +127,23 @@ class TranslatorViewModel : ViewModel() {
 
     }
 
-
+    /**
+     * Updates the TextField with the current input
+     */
     fun updateTranslateText(input: String) {
         translationText = input
     }
 
+    /**
+     * Sets the visibility of the reverse translation
+     */
     fun showReverseTranslation(input: Boolean) {
         showReverseTranslation = input
     }
 
+    /**
+     * Clear TextField
+     */
     fun clearTranslationText() {
         translationText = ""
     }

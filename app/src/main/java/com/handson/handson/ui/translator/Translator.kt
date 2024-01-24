@@ -479,7 +479,7 @@ fun Camera(
     }
 
     val labels = listOf(
-        "A", "B", "C", "D", "K"
+        "A", "B", "C", "D", "F", "H", "K", "L","O", "U"
     )
 
     AndroidView(
