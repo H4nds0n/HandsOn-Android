@@ -5,8 +5,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.ml.modeldownloader.CustomModel
@@ -40,12 +38,8 @@ class QuizViewModel : ViewModel() {
     var showCorrect by mutableStateOf(false)
         private set
 
-    // current question (as letter)
-    var questionLetter by mutableStateOf(generateQuestionLetter())
-        private set
-
-    // current question (as word)
-    var questionWord by mutableStateOf(generateQuestionWord())
+    // current question
+    var question by mutableStateOf("")
         private set
 
     // current input of the user
@@ -54,6 +48,8 @@ class QuizViewModel : ViewModel() {
     // size of the input from the user
     var answerCount by mutableIntStateOf(0)
     private set
+
+    var selectedLevel by mutableIntStateOf(1)
 
     private val _mlModelIsReadyState = MutableStateFlow(false)
     val mlModelIsReady: StateFlow<Boolean> = _mlModelIsReadyState
@@ -103,8 +99,7 @@ class QuizViewModel : ViewModel() {
     // skips the current question and generates a new one
     fun skip() {
         resetWord()
-        if (levelTwo) newQuestionWord()
-        else newQuestionLetter()
+        newQuestion()
     }
 
     // switch the mode from word to letter or vice versa
@@ -128,30 +123,48 @@ class QuizViewModel : ViewModel() {
         showCorrect = input
     }
 
-    // generates a new question (as word)
-    fun newQuestionLetter() {
-        val oldQuestion = questionLetter
-        while (oldQuestion == questionLetter)
-            questionLetter = generateQuestionLetter()
+    fun levelContainsWords() :Boolean {
+        return HandsOn.appContext.resources.getStringArray(R.array.level_content)[selectedLevel].split(",")[0] == "t"
     }
 
-    // generates a new question (as letter)
-    fun newQuestionWord() {
-        val oldQuestion = questionWord
-        while (oldQuestion == questionWord)
-            questionWord = generateQuestionWord()
+    // generates a new question
+    fun newQuestion() {
+        val levelContent = HandsOn.appContext.resources.getStringArray(R.array.level_content)
+
+        if(!levelContainsWords()) {
+            val selectedLevelContent = levelContent[selectedLevel].split("f,")[1]
+            newQuestionLetter(levelContent = selectedLevelContent)
+        }
+        else {
+            val selectedLevelContent = levelContent[selectedLevel].split("t,")[1]
+            newQuestionWord(levelContent = selectedLevelContent)
+        }
+
+    }
+
+    private fun newQuestionLetter(levelContent: String) {
+        val oldQuestion = question
+        do
+            question = generateQuestionLetter(levelContent = levelContent)
+        while (oldQuestion == question)
+    }
+
+    private fun newQuestionWord(levelContent: String) {
+        val oldQuestion = question
+        do
+            question = generateQuestionWord(levelContent = levelContent)
+        while (oldQuestion == question)
     }
 
     // helper-function for generating a new question (as letter)
-    private fun generateQuestionLetter(): String {
-        val alphabet = HandsOn.appContext.getString(R.string.alphabet)
-        val randomIndex = Random.nextInt(alphabet.length)
-        return alphabet[randomIndex].toString()
+    private fun generateQuestionLetter(levelContent: String): String {
+        val randomIndex = Random.nextInt(levelContent.length)
+        return levelContent[randomIndex].toString()
     }
 
     // helper-function for generating a new question (as word)
-    private fun generateQuestionWord(): String {
-        val words = HandsOn.appContext.resources.getStringArray(R.array.question_words)
+    private fun generateQuestionWord(levelContent: String): String {
+        val words = levelContent.split(",")
         val randomIndex = Random.nextInt(words.size)
         return words[randomIndex]
     }

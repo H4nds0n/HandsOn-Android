@@ -57,6 +57,8 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
+import com.handson.handson.HandsOn
+import com.handson.handson.R
 import com.handson.handson.ui.Screen
 import com.handson.handson.ui.translator.Camera
 
@@ -78,13 +80,10 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
         Manifest.permission.CAMERA
     )
 
-    // init questions
-    // current answer
-    var answer = ""
-
-    // setting content of text field
-    quizViewModel.updateTranslation(question = quizViewModel.questionLetter, answer = answer)
-
+    LaunchedEffect(key1 = Unit) {
+        quizViewModel.selectedLevel = 0
+        quizViewModel.newQuestion()
+    }
 
     Scaffold(
         topBar = {
@@ -323,6 +322,35 @@ fun PortraitContent(quizViewModel: QuizViewModel, modelReady: Boolean) {
 private fun checkAnswer(quizViewModel: QuizViewModel, answer: String) {
     // ignored, if the "answer correct"-screen is currently displayed
     if (!quizViewModel.showCorrect) {
+        quizViewModel.updateTranslation(
+            question = quizViewModel.question,
+            answer = answer
+        )
+
+        if (!quizViewModel.levelContainsWords()) {
+            if (answer == quizViewModel.question) {
+                quizViewModel.showCorrectAnswer(true)
+                quizViewModel.newQuestion()
+            }
+        }
+        else{
+            // if the returned answer is equal to the letter of the current position in the question,
+            // the letter is added to the answer and the answer-count is raised
+            if (answer == quizViewModel.question[quizViewModel.answerCount].toString()) {
+                quizViewModel.riseCounter()
+                quizViewModel.answeredWord += answer
+            }
+
+            // if the answer is complete, the answer screen gets displayed and the question reset
+            if (quizViewModel.question == quizViewModel.answeredWord) {
+                quizViewModel.showCorrectAnswer(true)
+                quizViewModel.newQuestion()
+                quizViewModel.resetWord()
+            }
+        }
+
+
+        /*
         // if the word-training-mode is not active
         if (!quizViewModel.levelTwo) {
             quizViewModel.updateTranslation(
@@ -353,7 +381,8 @@ private fun checkAnswer(quizViewModel: QuizViewModel, answer: String) {
                 quizViewModel.newQuestionWord()
                 quizViewModel.resetWord()
             }
-        }
+        }*/
+
     }
 }
 
