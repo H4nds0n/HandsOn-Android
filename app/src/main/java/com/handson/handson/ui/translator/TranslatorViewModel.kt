@@ -15,6 +15,7 @@ import com.handson.handson.HandsOn
 import com.handson.handson.R
 import com.handson.handson.model.ASLImages
 import com.handson.handson.model.ASLReverseTranslator
+import com.handson.handson.model.Translation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -146,6 +147,16 @@ class TranslatorViewModel : ViewModel() {
      */
     fun clearTranslationText() {
         translationText = ""
+    }
+
+    /**
+     * Save Translation in Db and clear textfield
+     */
+    fun clearAndSaveTranslationText() {
+        viewModelScope.launch(Dispatchers.IO){
+            HandsOn.translationDatabase.translationDao().insertAll(Translation(translationText))
+            translationText = ""
+        }
     }
 
     fun setBitmap(bitmap: Bitmap) {

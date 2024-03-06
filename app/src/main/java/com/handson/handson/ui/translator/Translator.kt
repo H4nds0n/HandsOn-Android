@@ -42,6 +42,8 @@ import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Stop
+import androidx.compose.material.icons.twotone.History
+import androidx.compose.material.icons.twotone.List
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -160,6 +162,9 @@ fun Translator(
                     Text("HandsOn")
                 },
                 actions = {
+                    IconButton(onClick = {navController.navigate(Screen.History.route) }) {
+                        Icon(Icons.TwoTone.History, contentDescription = "Translation History")
+                    }
                     IconButton(onClick = { navController.navigate(Screen.Quiz.route) }) {
                         Icon(
                             imageVector = Icons.Filled.ArrowForward,
@@ -232,8 +237,8 @@ fun Translator(
                             ) {
                                 Text(text = stringResource(R.string.reverse))
                             }
-                            Button(onClick = { translatorViewModel.clearTranslationText() }) {
-                                Text(text = stringResource(R.string.clear))
+                            Button(onClick = { translatorViewModel.clearAndSaveTranslationText() }) {
+                                Text(text = stringResource(R.string.clearAndSave))
                             }
                         }
 
@@ -295,8 +300,8 @@ fun Translator(
                                 }) {
                                     Text(text = stringResource(R.string.reverse))
                                 }
-                                Button(onClick = { translatorViewModel.clearTranslationText() }) {
-                                    Text(text = stringResource(R.string.clear))
+                                Button(onClick = { translatorViewModel.clearAndSaveTranslationText()}) {
+                                    Text(text = stringResource(R.string.clearAndSave))
                                 }
                             }
 

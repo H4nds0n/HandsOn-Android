@@ -1,9 +1,9 @@
 import com.android.build.api.dsl.AaptOptions
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.gms.google-services")
+    id("kotlin-kapt")
 }
 
 android {
@@ -33,11 +33,11 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
@@ -61,7 +61,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
     implementation("androidx.activity:activity-compose:1.7.2")
     implementation(platform("androidx.compose:compose-bom:2023.03.00"))
-    implementation ("androidx.compose.material:material-icons-extended:1.5.4")
+    implementation("androidx.compose.material:material-icons-extended:1.5.4")
     implementation("androidx.navigation:navigation-runtime-ktx:2.7.2")
     implementation("androidx.navigation:navigation-compose:2.7.2")
     implementation("androidx.compose.ui:ui")
@@ -69,24 +69,24 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.camera:camera-view:1.3.0")
-    implementation ("androidx.camera:camera-core:1.3.0")
-    implementation ("androidx.camera:camera-camera2:1.3.0")
-    implementation ("androidx.camera:camera-lifecycle:1.3.0")
-    implementation ("androidx.camera:camera-video:1.3.0")
-    implementation ("androidx.camera:camera-extensions:1.3.0")
+    implementation("androidx.camera:camera-core:1.3.0")
+    implementation("androidx.camera:camera-camera2:1.3.0")
+    implementation("androidx.camera:camera-lifecycle:1.3.0")
+    implementation("androidx.camera:camera-video:1.3.0")
+    implementation("androidx.camera:camera-extensions:1.3.0")
 
-    implementation ("com.google.accompanist:accompanist-permissions:0.33.2-alpha")
-    implementation ("io.coil-kt:coil-compose:1.4.0")
+    implementation("com.google.accompanist:accompanist-permissions:0.33.2-alpha")
+    implementation("io.coil-kt:coil-compose:1.4.0")
 
-    implementation ("com.google.mediapipe:solution-core:latest.release")
-    implementation ("com.google.mediapipe:hands:latest.release")
+    implementation("com.google.mediapipe:solution-core:latest.release")
+    implementation("com.google.mediapipe:hands:latest.release")
     implementation("org.tensorflow:tensorflow-lite-support:latest.release")
     //implementation("org.tensorflow:tensorflow-lite:latest.release")
-    implementation ("org.tensorflow:tensorflow-lite:2.14.0")
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
 
     implementation("org.tensorflow:tensorflow-lite-metadata:latest.release")
     // implementation("org.tensorflow:tensorflow-lite-gpu:latest.release")
-    implementation ("com.google.android.gms:play-services-tflite-gpu:16.2.0")
+    implementation("com.google.android.gms:play-services-tflite-gpu:16.2.0")
     implementation("com.google.firebase:firebase-ml-model-interpreter:22.0.4")
 
 
@@ -102,6 +102,17 @@ dependencies {
 
     implementation(platform("com.google.firebase:firebase-bom:32.7.1"))
     implementation("com.google.firebase:firebase-ml-modeldownloader")
+
+
+    val room_version = "2.6.1"
+
+    implementation("androidx.room:room-runtime:$room_version")
+    annotationProcessor("androidx.room:room-compiler:$room_version")
+    kapt ("androidx.room:room-compiler:$room_version")
+    // optional - Kotlin Extensions and Coroutines support for Room
+    implementation("androidx.room:room-ktx:$room_version")
+
+
 
 
 }
