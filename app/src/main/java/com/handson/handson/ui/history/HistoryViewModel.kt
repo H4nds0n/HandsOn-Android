@@ -30,6 +30,9 @@ class HistoryViewModel : ViewModel() {
     private val _showAlertState = MutableStateFlow(false)
     val showAlertState: StateFlow<Boolean> = _showAlertState
 
+    private val _showAnimation = MutableStateFlow(false)
+    val showAnimationState: StateFlow<Boolean> = _showAnimation
+
     // prepare the SystemService for the clipboard
     val clipboard =
         HandsOn.appContext.getSystemService(
@@ -43,6 +46,15 @@ class HistoryViewModel : ViewModel() {
      */
     fun showAlert(yes: Boolean) {
         _showAlertState.value = yes
+    }
+
+    /**
+     * Enable/Disable the animation
+     * @param yes show animation
+     * @author Matthias Kroiss
+     */
+    fun showAnimation(yes: Boolean) {
+        _showAnimation.value = yes
     }
 
     /**
