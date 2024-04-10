@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.ml.modeldownloader.CustomModel
@@ -51,10 +52,13 @@ class QuizViewModel : ViewModel() {
     var answerCount by mutableIntStateOf(0)
     private set
 
+    // contains the id of the active level
     var selectedLevel by mutableIntStateOf(0)
 
+    // contains the id of the highest level unlocked
     var levelUnlocked by mutableIntStateOf(0)
 
+    // value for returning how many level are available
     val numberOfLevels = 4
 
     private val _mlModelIsReadyState = MutableStateFlow(false)
@@ -136,7 +140,6 @@ class QuizViewModel : ViewModel() {
     // generates a new question
     fun newQuestion() {
         val levelContent = HandsOn.appContext.resources.getStringArray(R.array.level_content)
-
         if(!levelContainsWords()) {
             val selectedLevelContent = levelContent[selectedLevel].split("f,")[1]
             newQuestionLetter(levelContent = selectedLevelContent)

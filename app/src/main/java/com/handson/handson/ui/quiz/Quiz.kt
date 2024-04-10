@@ -87,9 +87,7 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
     )
 
     LaunchedEffect(key1 = Unit) {
-        Log.d("Quiz", "called")
         quizViewModel.selectedLevel = level
-        Log.d("Quiz", "Level: " + quizViewModel.selectedLevel)
         quizViewModel.newQuestion()
     }
     Scaffold(
@@ -97,15 +95,6 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
             CenterAlignedTopAppBar(
                 title = {
                     Text("HandsOn")
-                },
-                actions = {
-
-                    IconButton(onClick = { quizViewModel.switchLevel() }) {
-                        Icon(
-                            imageVector = Icons.Filled.TextIncrease,
-                            contentDescription = null
-                        )
-                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigate("${Screen.Level.route}/${quizViewModel.levelUnlocked}") }) {
@@ -340,9 +329,8 @@ private fun checkAnswer(quizViewModel: QuizViewModel, answer: String, levelNotUn
                 quizViewModel.showCorrectAnswer(true)
                 quizViewModel.newQuestion()
                 if (quizViewModel.selectedLevel < quizViewModel.numberOfLevels)
-                    Log.d("Quiz", "unlocked: ${quizViewModel.levelUnlocked}")
+                    Log.d("Quiz", "level unlocked: ${quizViewModel.levelUnlocked}")
                     quizViewModel.levelUnlocked++
-                Log.d("Quiz", "unlocked: ${quizViewModel.levelUnlocked}")
             }
         }
         else{
