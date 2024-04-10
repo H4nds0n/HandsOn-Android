@@ -10,6 +10,7 @@
     <string name="dismiss">Dismiss</string>
     <string name="snackbar_TakeHandOutOfPicture">Take hand out of the picture and try again.</string>
     <string name="alphabet">ABC</string>
+    <string name="nothing_to_show_here">Nothing to show here</string>
     <string-array name="question_words">
         <item>BBCC</item>
         <item>BCCB</item>
