@@ -154,8 +154,10 @@ class TranslatorViewModel : ViewModel() {
      */
     fun clearAndSaveTranslationText() {
         viewModelScope.launch(Dispatchers.IO){
-            HandsOn.translationDatabase.translationDao().insertAll(Translation(translationText))
-            translationText = ""
+            if(translationText.isNotEmpty()) {
+                HandsOn.translationDatabase.translationDao().insertAll(Translation(translationText))
+                translationText = ""
+            }
         }
     }
 
