@@ -1,12 +1,15 @@
 package com.handson.handson.ui.quiz
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
 import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -19,10 +22,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.TextIncrease
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -31,6 +32,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
@@ -40,15 +42,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -57,15 +63,15 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
-import com.handson.handson.HandsOn
-import com.handson.handson.R
+import com.handson.handson.components.SuccessAnimation
 import com.handson.handson.ui.Screen
+import com.handson.handson.ui.theme.HandsOnTheme
 import com.handson.handson.ui.translator.Camera
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
-fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel()) {
-
+fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(), level: Int = 0) {
     val context = LocalContext.current
     val activity = (context as? Activity)
     val modelReady by quizViewModel.mlModelIsReady.collectAsState()
@@ -81,10 +87,11 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
     )
 
     LaunchedEffect(key1 = Unit) {
-        quizViewModel.selectedLevel = 0
+        Log.d("Quiz", "called")
+        quizViewModel.selectedLevel = level
+        Log.d("Quiz", "Level: " + quizViewModel.selectedLevel)
         quizViewModel.newQuestion()
     }
-
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -101,7 +108,7 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigate(Screen.Translator.route) }) {
+                    IconButton(onClick = { navController.navigate("${Screen.Level.route}/${quizViewModel.levelUnlocked}") }) {
                         Icon(
                             imageVector = Icons.Filled.ArrowBack,
                             contentDescription = "Localized Description"
@@ -221,7 +228,8 @@ fun LandscapeContent(quizViewModel: QuizViewModel, modelReady: Boolean) {
                             quizViewModel = quizViewModel,
                             answer = answer
                         )
-                    }, quizViewModel.mlModel!!)
+                    }, quizViewModel.mlModel!!
+                )
         }
 
 
@@ -279,13 +287,10 @@ fun PortraitContent(quizViewModel: QuizViewModel, modelReady: Boolean) {
                             quizViewModel = quizViewModel,
                             answer = answer
                         )
-                    }, quizViewModel.mlModel!!)
+                    }, quizViewModel.mlModel!!
+                )
             }
         }
-
-
-
-
 
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -298,7 +303,6 @@ fun PortraitContent(quizViewModel: QuizViewModel, modelReady: Boolean) {
             maxLines = Int.MAX_VALUE,
             readOnly = true
         )
-
 
         Spacer(modifier = Modifier.height(15.dp))
 
@@ -319,7 +323,11 @@ fun PortraitContent(quizViewModel: QuizViewModel, modelReady: Boolean) {
 }
 
 // takes the output of the ai-model and checks the answer
-private fun checkAnswer(quizViewModel: QuizViewModel, answer: String) {
+@SuppressLint("SuspiciousIndentation")
+private fun checkAnswer(quizViewModel: QuizViewModel, answer: String, levelNotUnlocked: () -> Unit = {}) {
+    if(quizViewModel.levelUnlocked < quizViewModel.selectedLevel) {
+        levelNotUnlocked()
+    }
     // ignored, if the "answer correct"-screen is currently displayed
     if (!quizViewModel.showCorrect) {
         quizViewModel.updateTranslation(
@@ -331,6 +339,10 @@ private fun checkAnswer(quizViewModel: QuizViewModel, answer: String) {
             if (answer == quizViewModel.question) {
                 quizViewModel.showCorrectAnswer(true)
                 quizViewModel.newQuestion()
+                if (quizViewModel.selectedLevel < quizViewModel.numberOfLevels)
+                    Log.d("Quiz", "unlocked: ${quizViewModel.levelUnlocked}")
+                    quizViewModel.levelUnlocked++
+                Log.d("Quiz", "unlocked: ${quizViewModel.levelUnlocked}")
             }
         }
         else{
@@ -390,15 +402,35 @@ private fun checkAnswer(quizViewModel: QuizViewModel, answer: String) {
 @Composable
 private fun ShowCorrect(quizViewModel: QuizViewModel = viewModel()) {
     Dialog(onDismissRequest = { quizViewModel.showCorrectAnswer(false) }) {
-        Icon(
+        /*Icon(
             imageVector = Icons.Filled.Check,
             contentDescription = "Localized Description",
             modifier = Modifier
                 .height(150.dp)
                 .width(150.dp),
             tint = Color.Green
-        )
+        )*/
+        Column(
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.clickable { quizViewModel.showCorrectAnswer(false) }
+        ) {
 
+
+            SuccessAnimation(
+                Modifier
+                    .height(250.dp)
+                    .width(250.dp)
+
+            )
+            Text(
+                text = "Well Done!",
+                textDecoration = TextDecoration.Underline,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(text = "Tap to continue.")
+        }
     }
 }
 

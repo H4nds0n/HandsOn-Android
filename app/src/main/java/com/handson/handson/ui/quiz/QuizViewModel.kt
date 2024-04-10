@@ -3,6 +3,7 @@ package com.handson.handson.ui.quiz
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.Arrays.asList
 import kotlin.random.Random
 
 class QuizViewModel : ViewModel() {
@@ -49,7 +51,11 @@ class QuizViewModel : ViewModel() {
     var answerCount by mutableIntStateOf(0)
     private set
 
-    var selectedLevel by mutableIntStateOf(1)
+    var selectedLevel by mutableIntStateOf(0)
+
+    var levelUnlocked by mutableIntStateOf(0)
+
+    val numberOfLevels = 4
 
     private val _mlModelIsReadyState = MutableStateFlow(false)
     val mlModelIsReady: StateFlow<Boolean> = _mlModelIsReadyState
@@ -168,6 +174,4 @@ class QuizViewModel : ViewModel() {
         val randomIndex = Random.nextInt(words.size)
         return words[randomIndex]
     }
-
-
 }
