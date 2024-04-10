@@ -17,11 +17,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -29,9 +27,11 @@ import com.handson.handson.ui.Screen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-
+// item displayed in the Level-Selection-List
+// Takes a value as id of Level (z.B. 1 for Level 1)
+// and a method which is executed when the item is clicked.
 @Composable
-fun ListItemWithDifferentiation(value: Int, onItemClick: (Int) -> Unit) {
+fun ListItem(value: Int, onItemClick: (Int) -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -46,13 +46,14 @@ fun ListItemWithDifferentiation(value: Int, onItemClick: (Int) -> Unit) {
     }
 }
 
+// Level-Selection-List which contains a list-item for every level available.
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LevelSelection(navController: NavController, levelUnlocked: Int = 0, viewModel: QuizViewModel = viewModel()) {
+    // List for level selection
     val items = (1..4).toList()
     viewModel.levelUnlocked = levelUnlocked
-    Log.d("Quiz", "Level-unlocked: $levelUnlocked")
 
     Scaffold(
         topBar = {
@@ -60,15 +61,7 @@ fun LevelSelection(navController: NavController, levelUnlocked: Int = 0, viewMod
                 title = {
                     Text("HandsOn")
                 },
-                actions = {
-
-                    IconButton(onClick = { viewModel.switchLevel() }) {
-                        Icon(
-                            imageVector = Icons.Filled.TextIncrease,
-                            contentDescription = null
-                        )
-                    }
-                },
+                // Navigate back to the Translator-Screen
                 navigationIcon = {
                     IconButton(onClick = { navController.navigate(Screen.Translator.route) }) {
                         Icon(
@@ -88,7 +81,9 @@ fun LevelSelection(navController: NavController, levelUnlocked: Int = 0, viewMod
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items.forEach { item ->
-                ListItemWithDifferentiation(item) { clickedItem ->
+                ListItem(item) { clickedItem ->
+                    // When the clicked level is not unlocked, a message (toast) is shown and access is denied,
+                    // if the level is unlocked, the user is routed to the Quiz-Screen.
                     if(levelUnlocked < clickedItem-1)
                         showToast(context = navController.context, message = "Level is not unlocked")
                     else {
