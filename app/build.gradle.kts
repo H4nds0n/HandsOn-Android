@@ -103,6 +103,8 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:32.7.1"))
     implementation("com.google.firebase:firebase-ml-modeldownloader")
 
+    implementation("com.airbnb.android:lottie-compose:6.4.0")
+
 
     val room_version = "2.6.1"
 
