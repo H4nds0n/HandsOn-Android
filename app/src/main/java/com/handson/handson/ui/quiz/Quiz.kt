@@ -1,12 +1,14 @@
 package com.handson.handson.ui.quiz
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
 import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -64,11 +67,11 @@ import com.handson.handson.components.SuccessAnimation
 import com.handson.handson.ui.Screen
 import com.handson.handson.ui.theme.HandsOnTheme
 import com.handson.handson.ui.translator.Camera
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
-fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel()) {
-
+fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(), level: Int = 0) {
     val context = LocalContext.current
     val activity = (context as? Activity)
     val modelReady by quizViewModel.mlModelIsReady.collectAsState()
@@ -83,14 +86,12 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
         Manifest.permission.CAMERA
     )
 
-    // init questions
-    // current answer
-    var answer = ""
-
-    // setting content of text field
-    quizViewModel.updateTranslation(question = quizViewModel.questionLetter, answer = answer)
-
-
+    LaunchedEffect(key1 = Unit) {
+        Log.d("Quiz", "called")
+        quizViewModel.selectedLevel = level
+        Log.d("Quiz", "Level: " + quizViewModel.selectedLevel)
+        quizViewModel.newQuestion()
+    }
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -107,7 +108,7 @@ fun Quiz(navController: NavController, quizViewModel: QuizViewModel = viewModel(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigate(Screen.Translator.route) }) {
+                    IconButton(onClick = { navController.navigate("${Screen.Level.route}/${quizViewModel.levelUnlocked}") }) {
                         Icon(
                             imageVector = Icons.Filled.ArrowBack,
                             contentDescription = "Localized Description"
@@ -291,10 +292,6 @@ fun PortraitContent(quizViewModel: QuizViewModel, modelReady: Boolean) {
             }
         }
 
-
-
-
-
         Spacer(modifier = Modifier.height(10.dp))
 
         TextField(
@@ -306,7 +303,6 @@ fun PortraitContent(quizViewModel: QuizViewModel, modelReady: Boolean) {
             maxLines = Int.MAX_VALUE,
             readOnly = true
         )
-
 
         Spacer(modifier = Modifier.height(15.dp))
 
@@ -327,9 +323,46 @@ fun PortraitContent(quizViewModel: QuizViewModel, modelReady: Boolean) {
 }
 
 // takes the output of the ai-model and checks the answer
-private fun checkAnswer(quizViewModel: QuizViewModel, answer: String) {
+@SuppressLint("SuspiciousIndentation")
+private fun checkAnswer(quizViewModel: QuizViewModel, answer: String, levelNotUnlocked: () -> Unit = {}) {
+    if(quizViewModel.levelUnlocked < quizViewModel.selectedLevel) {
+        levelNotUnlocked()
+    }
     // ignored, if the "answer correct"-screen is currently displayed
     if (!quizViewModel.showCorrect) {
+        quizViewModel.updateTranslation(
+            question = quizViewModel.question,
+            answer = answer
+        )
+
+        if (!quizViewModel.levelContainsWords()) {
+            if (answer == quizViewModel.question) {
+                quizViewModel.showCorrectAnswer(true)
+                quizViewModel.newQuestion()
+                if (quizViewModel.selectedLevel < quizViewModel.numberOfLevels)
+                    Log.d("Quiz", "unlocked: ${quizViewModel.levelUnlocked}")
+                    quizViewModel.levelUnlocked++
+                Log.d("Quiz", "unlocked: ${quizViewModel.levelUnlocked}")
+            }
+        }
+        else{
+            // if the returned answer is equal to the letter of the current position in the question,
+            // the letter is added to the answer and the answer-count is raised
+            if (answer == quizViewModel.question[quizViewModel.answerCount].toString()) {
+                quizViewModel.riseCounter()
+                quizViewModel.answeredWord += answer
+            }
+
+            // if the answer is complete, the answer screen gets displayed and the question reset
+            if (quizViewModel.question == quizViewModel.answeredWord) {
+                quizViewModel.showCorrectAnswer(true)
+                quizViewModel.newQuestion()
+                quizViewModel.resetWord()
+            }
+        }
+
+
+        /*
         // if the word-training-mode is not active
         if (!quizViewModel.levelTwo) {
             quizViewModel.updateTranslation(
@@ -360,7 +393,8 @@ private fun checkAnswer(quizViewModel: QuizViewModel, answer: String) {
                 quizViewModel.newQuestionWord()
                 quizViewModel.resetWord()
             }
-        }
+        }*/
+
     }
 }
 
@@ -399,5 +433,4 @@ private fun ShowCorrect(quizViewModel: QuizViewModel = viewModel()) {
         }
     }
 }
-
 

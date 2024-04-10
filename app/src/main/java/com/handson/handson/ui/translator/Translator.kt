@@ -165,7 +165,7 @@ fun Translator(
                     IconButton(onClick = {navController.navigate(Screen.History.route) }) {
                         Icon(Icons.TwoTone.History, contentDescription = "Translation History")
                     }
-                    IconButton(onClick = { navController.navigate(Screen.Quiz.route) }) {
+                    IconButton(onClick = { navController.navigate(Screen.Level.route) }) {
                         Icon(
                             imageVector = Icons.Filled.ArrowForward,
                             contentDescription = "Localized Description"

@@ -17,4 +17,10 @@
         <item>CBBC</item>
         <item>CCBB</item>
     </string-array>
+    <string-array name="level_content">
+        <item>f,ABCD</item>
+        <item>f,ABCDEFGH</item>
+        <item>f,ABCDEFGHIJKL</item>
+        <item>t,BBCC,BCCB,CBBC,CCBB</item>
+    </string-array>
 </resources>
